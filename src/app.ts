@@ -11,3 +11,7 @@ app.use("/api/news", newsRoutes);
 app.use(errorHandler);
 
 export default app;
+
+app.get("/", (req, res) => {
+  res.send("🚀 Yashora News API is running smoothly!");
+});
