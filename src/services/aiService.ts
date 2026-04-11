@@ -12,7 +12,7 @@ export const processContent = async (
         messages: [
           {
             role: "system",
-            content: `Summarize in 50 words and translate to ${lang}`,
+            content: `Summarize in 100 words and translate to ${lang}`,
           },
           {
             role: "user",
