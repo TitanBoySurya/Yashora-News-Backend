@@ -1,6 +1,9 @@
 import { supabase } from "../config/supabase";
 
-// 📰 Get news with pagination
+/**
+ * 📰 Get news with pagination
+ * Range logic: (0, 9) = Page 1, (10, 19) = Page 2
+ */
 export const findNewsByLang = async (
   lang: string,
   limit: number,
@@ -12,7 +15,7 @@ export const findNewsByLang = async (
       .select("*")
       .eq("lang_code", lang)
       .order("published_at", { ascending: false })
-      .range(offset, offset + limit - 1); // 🔥 pagination
+      .range(offset, offset + limit - 1); 
 
     if (error) throw error;
 
@@ -23,8 +26,11 @@ export const findNewsByLang = async (
   }
 };
 
-// 🔁 Dedup check
-export const checkNewsExists = async (link: string) => {
+/**
+ * 🔁 Dedup check
+ * Checks if a news link already exists in the database
+ */
+export const checkNewsExists = async (link: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
       .from("news_articles")
@@ -33,22 +39,25 @@ export const checkNewsExists = async (link: string) => {
       .maybeSingle();
 
     if (error) return false;
-
     return !!data;
   } catch (err) {
     return false;
   }
 };
 
-// 🗄️ Insert news
+/**
+ * 🗄️ Insert news
+ * Using upsert to prevent duplicates based on 'link'
+ */
 export const insertNews = async (news: any) => {
   try {
+    // 🔥 upsert 'onConflict' link par duplicates rokta hai
     const { error } = await supabase
       .from("news_articles")
-      .insert(news);
+      .upsert(news, { onConflict: 'link' });
 
     if (error) {
-      console.error("❌ Insert Error:", error.message);
+      console.error("❌ Insert/Upsert Error:", error.message);
     }
   } catch (err: any) {
     console.error("❌ Insert Catch Error:", err.message);
