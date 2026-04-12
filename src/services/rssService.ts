@@ -32,40 +32,36 @@ const FEEDS: Record<string, string[]> = {
   mr: ["https://zeenews.india.com/marathi/rss", "https://news.google.com/rss?hl=mr&gl=IN"],
 };
 
-/**
- * 🖼️ Advanced Image Extraction Logic
- * Parses deep nested attributes from different news portals
- */
+// 🔥 Helper: Source name ko chota aur saaf karne ke liye
+const cleanSourceName = (title: string): string => {
+  if (title.includes("Aaj Tak")) return "Aaj Tak";
+  if (title.includes("ABP")) return "ABP News";
+  if (title.includes("Zee News")) return "Zee News";
+  if (title.includes("NDTV")) return "NDTV";
+  if (title.includes("Hindustan Times")) return "Hindustan Times";
+  if (title.includes("Times of India")) return "TOI";
+  if (title.includes("Google News")) return "Google News";
+  return title.split(':')[0].split('-')[0].trim(); // Default cleanup
+};
+
 const getBestImage = (item: any): string | null => {
   try {
-    // 1. media:content (Aaj Tak, Zee News) - Sometime it's an array with $.url
     const mediaContent = item["media:content"];
     if (mediaContent && mediaContent.length > 0) {
       const media = mediaContent[0];
       const url = media.url || (media.$ && media.$.url);
       if (url) return url;
     }
-
-    // 2. enclosure (ABP News, NDTV)
-    if (item.enclosure && item.enclosure.url) {
-      return item.enclosure.url;
-    }
-
-    // 3. media:thumbnail (Google News)
+    if (item.enclosure && item.enclosure.url) return item.enclosure.url;
     if (item["media:thumbnail"]) {
       const thumb = item["media:thumbnail"];
-      const url = thumb.url || (thumb.$ && thumb.$.url);
-      if (url) return url;
+      return thumb.url || (thumb.$ && thumb.$.url);
     }
-
-    // 4. HTML Extraction (Fall-back)
     const content = item["content:encoded"] || item.content || "";
     const imgMatch = content.match(/<img.*?src=["'](.*?)["']/);
-    if (imgMatch && imgMatch[1]) {
-      return imgMatch[1];
-    }
+    if (imgMatch && imgMatch[1]) return imgMatch[1];
   } catch (e) {
-    console.error("Image Extraction Error:", e);
+    return null;
   }
   return null;
 };
@@ -82,34 +78,26 @@ export const fetchRSS = async (lang: string) => {
 
     results.forEach((result) => {
       if (result.status === "fulfilled") {
-        const feedTitle = result.value.title || "News Update";
+        // 🔥 Saaf source name nikal rahe hain
+        const cleanSource = cleanSourceName(result.value.title || "News");
         
-        const items = result.value.items.map(item => {
-            const extractedImage = getBestImage(item);
-            
-            return {
-              title: item.title,
-              link: item.link,
-              contentSnippet: item.contentSnippet || item.content || "",
-              pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
-              source_name: feedTitle,
-              image_url: extractedImage 
-            };
-        });
+        const items = result.value.items.map(item => ({
+          title: item.title,
+          link: item.link,
+          contentSnippet: item.contentSnippet || item.content || "",
+          pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
+          source_name: cleanSource, // Android mein yahi dikhega
+          image_url: getBestImage(item) 
+        }));
         rawNews.push(...items);
       }
     });
 
-    // 1. Remove Duplicates
     const uniqueNews = Array.from(new Map(rawNews.map(item => [item.title, item])).values());
 
-    // 2. Sort Latest First
-    const sortedNews = uniqueNews.sort((a, b) => {
-      return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
-    });
-
-    // 3. Return up to 60 items (Higher limit for Infinite Scroll)
-    return sortedNews.slice(0, 60);
+    return uniqueNews
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .slice(0, 80); // Infinite scroll ke liye 80 items
 
   } catch (err) {
     console.error("RSS Fetch Error:", err);
