@@ -3,56 +3,62 @@ import { processContent } from "./aiService";
 import {
   checkNewsExists,
   insertNews,
+  deleteOldNews, // Isse model mein add kar lena
 } from "../models/newsModel";
 
-// 🔥 Fallback image sirf tab jab kahin se kuch na mile
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
 
 export const processNewsService = async (lang: string) => {
   try {
-    // 1. Fetch news from RSS (rssService ab image nikal kar dega)
-    const items = await fetchRSS(lang);
+    console.log(`🚀 Starting News Process for: ${lang}`);
 
-    // 🚀 Limit badha kar 40-50 kar di hai taaki app mein zyada news dikhe
-    const limitedItems = items.slice(0, 40);
+    // 1. 🔥 AUTO-CLEANUP: 3 din se purani news apne aap delete karega
+    await deleteOldNews(3); 
+
+    // 2. Fetch news from RSS (60-80 items for infinite feel)
+    const items = await fetchRSS(lang);
+    const limitedItems = items.slice(0, 80);
 
     for (const item of limitedItems) {
       if (!item.link || !item.title) continue;
 
       try {
+        // 3. Duplicate Check
         const exists = await checkNewsExists(item.link);
         if (exists) continue;
 
-        // 🧠 AI Summary
-        // AI ko thoda zyada context bhej rahe hain taaki summary badi aur saaf bane
-        const aiInput = `${item.title}. ${item.contentSnippet || ""}`;
+        // 4. 🧠 AI Processing (Full context for complete summary)
+        const aiInput = `Headline: ${item.title}. Details: ${item.contentSnippet || ""}`;
         const summary = await processContent(aiInput, lang);
 
-        // 🖼️ Image Selection
-        // Pehle check karo ki rssService ne image nikal li hai?
-        // Agar nahi, toh fallback image use karo
+        // 5. 🖼️ Metadata Selection
         const image_url = item.image_url || DEFAULT_IMAGE;
+        const source = item.source_name || "Yashora News";
+        
+        // Date ko ISO format mein hi rakhein taaki Android "Time Ago" nikal sake
+        const published_at = item.pubDate || item.isoDate || new Date().toISOString();
 
-        const source = item.source_name || "News Update";
-
-        // 🗄️ Database Insertion
+        // 6. 🗄️ Database Insertion
         await insertNews({
           title: item.title,
           link: item.link,
-          summary: summary, // AI Generated summary
+          summary: summary,
           image_url: image_url,
           source: source,
           lang_code: lang,
-          published_at: item.pubDate || item.isoDate || new Date().toISOString(),
+          published_at: published_at,
         });
 
-        console.log(`✅ News Added: ${item.title.substring(0, 30)}...`);
+        console.log(`✅ News Stored: ${item.title.substring(0, 35)}...`);
 
       } catch (err) {
-        console.log("❌ Item Error:", err);
+        console.error("⚠️ Skipping one item due to error");
         continue;
       }
     }
+    
+    console.log(`✨ Process Finished for ${lang}. Database is Fresh!`);
+
   } catch (err) {
     console.error("❌ News Service Error:", err);
   }

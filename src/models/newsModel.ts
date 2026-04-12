@@ -51,7 +51,9 @@ export const checkNewsExists = async (link: string): Promise<boolean> => {
  */
 export const insertNews = async (news: any) => {
   try {
-    // 🔥 upsert 'onConflict' link par duplicates rokta hai
+    // 💡 Security check: Agar link null hai toh insert na karein
+    if (!news.link) return;
+
     const { error } = await supabase
       .from("news_articles")
       .upsert(news, { onConflict: 'link' });
@@ -61,5 +63,29 @@ export const insertNews = async (news: any) => {
     }
   } catch (err: any) {
     console.error("❌ Insert Catch Error:", err.message);
+  }
+};
+
+/**
+ * 🧹 Delete old news
+ * Database ko saaf rakhne ke liye taaki sirf fresh news dikhe
+ */
+export const deleteOldNews = async (days: number) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const { error } = await supabase
+      .from("news_articles")
+      .delete()
+      .lt("published_at", cutoffDate.toISOString()); 
+
+    if (error) {
+      console.error("❌ Cleanup Error:", error.message);
+    } else {
+      console.log(`🧹 Cleaned up news older than ${days} days`);
+    }
+  } catch (err: any) {
+    console.error("❌ Cleanup Catch Error:", err.message);
   }
 };

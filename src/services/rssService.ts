@@ -11,7 +11,6 @@ const parser = new Parser({
   },
 });
 
-// 🔥 Multi-Source Feeds
 const FEEDS: Record<string, string[]> = {
   hi: [
     "https://www.aajtak.in/rssfeeds/?id=home",
@@ -33,29 +32,40 @@ const FEEDS: Record<string, string[]> = {
   mr: ["https://zeenews.india.com/marathi/rss", "https://news.google.com/rss?hl=mr&gl=IN"],
 };
 
-// 🔥 Internal helper to get the best image URL
+/**
+ * 🖼️ Advanced Image Extraction Logic
+ * Parses deep nested attributes from different news portals
+ */
 const getBestImage = (item: any): string | null => {
   try {
-    // 1. Check media:content (High quality)
-    if (item["media:content"] && item["media:content"][0]?.url) {
-      return item["media:content"][0].url;
+    // 1. media:content (Aaj Tak, Zee News) - Sometime it's an array with $.url
+    const mediaContent = item["media:content"];
+    if (mediaContent && mediaContent.length > 0) {
+      const media = mediaContent[0];
+      const url = media.url || (media.$ && media.$.url);
+      if (url) return url;
     }
-    // 2. Check enclosure (Standard for many feeds)
+
+    // 2. enclosure (ABP News, NDTV)
     if (item.enclosure && item.enclosure.url) {
       return item.enclosure.url;
     }
-    // 3. Check media:thumbnail
-    if (item["media:thumbnail"] && item["media:thumbnail"].url) {
-      return item["media:thumbnail"].url;
+
+    // 3. media:thumbnail (Google News)
+    if (item["media:thumbnail"]) {
+      const thumb = item["media:thumbnail"];
+      const url = thumb.url || (thumb.$ && thumb.$.url);
+      if (url) return url;
     }
-    // 4. Extract from HTML content if available
-    const htmlContent = item["content:encoded"] || item.content || "";
-    const imgMatch = htmlContent.match(/<img.*?src="(.*?)"/);
+
+    // 4. HTML Extraction (Fall-back)
+    const content = item["content:encoded"] || item.content || "";
+    const imgMatch = content.match(/<img.*?src=["'](.*?)["']/);
     if (imgMatch && imgMatch[1]) {
       return imgMatch[1];
     }
   } catch (e) {
-    return null;
+    console.error("Image Extraction Error:", e);
   }
   return null;
 };
@@ -78,9 +88,11 @@ export const fetchRSS = async (lang: string) => {
             const extractedImage = getBestImage(item);
             
             return {
-              ...item,
+              title: item.title,
+              link: item.link,
+              contentSnippet: item.contentSnippet || item.content || "",
+              pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
               source_name: feedTitle,
-              // Backend processNews logic uses 'image_url'
               image_url: extractedImage 
             };
         });
@@ -88,18 +100,16 @@ export const fetchRSS = async (lang: string) => {
       }
     });
 
-    // 1. Remove Duplicates based on Title
+    // 1. Remove Duplicates
     const uniqueNews = Array.from(new Map(rawNews.map(item => [item.title, item])).values());
 
-    // 2. Sort by Date (Latest First)
+    // 2. Sort Latest First
     const sortedNews = uniqueNews.sort((a, b) => {
-      const dateA = new Date(a.pubDate || a.isoDate || 0).getTime();
-      const dateB = new Date(b.pubDate || b.isoDate || 0).getTime();
-      return dateB - dateA;
+      return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
     });
 
-    // 3. Return more news (50 items) so Android has more to scroll
-    return sortedNews.slice(0, 50);
+    // 3. Return up to 60 items (Higher limit for Infinite Scroll)
+    return sortedNews.slice(0, 60);
 
   } catch (err) {
     console.error("RSS Fetch Error:", err);
