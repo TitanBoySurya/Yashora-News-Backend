@@ -17,7 +17,7 @@ const FEEDS: Record<string, string[]> = {
     "https://www.abplive.com/rss",
     "https://zeenews.india.com/hindi/rss",
     "https://ndtv.in/rss",
-    "https://news.google.com/rss?hl=hi&gl=IN",
+    
   ],
   en: [
     "https://feeds.feedburner.com/ndtvnews-top-stories",
