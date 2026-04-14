@@ -44,11 +44,7 @@ const cleanSourceName = (title: string): string => {
   return title.split(":")[0].split("-")[0].trim();
 };
 
-// 🔥 fallback (stable, not random heavy API)
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
-
-// 🔥 OG scraper (LIMITED USE)
+// 🔥 OG IMAGE SCRAPER
 const getOGImage = async (url: string): Promise<string | null> => {
   try {
     const { data } = await axios.get(url, {
@@ -68,7 +64,7 @@ const getOGImage = async (url: string): Promise<string | null> => {
   }
 };
 
-// 🔥 FINAL IMAGE LOGIC (optimized)
+// 🔥 FINAL IMAGE LOGIC (BEST VERSION)
 const getBestImage = async (item: any, index: number): Promise<string> => {
   try {
     // 1. media:content
@@ -90,19 +86,26 @@ const getBestImage = async (item: any, index: number): Promise<string> => {
       if (url) return url;
     }
 
-    // 4. content html
-    const html = item["content:encoded"] || item.content || "";
-    const match = html.match(/<img.*?src=["'](.*?)["']/);
-    if (match?.[1]) return match[1];
+    // 4. content:encoded
+    const contentEncoded = item["content:encoded"] || "";
+    const img1 = contentEncoded.match(/<img.*?src=["'](.*?)["']/);
+    if (img1?.[1]) return img1[1];
 
-    // 5. 🔥 OG only for first few (performance save)
-    if (index < 5 && item.link) {
+    // 5. 🔥 Hindi feeds fix (IMPORTANT)
+    const desc = item.content || item.contentSnippet || "";
+    const img2 = desc.match(/<img.*?src=["'](.*?)["']/);
+    if (img2?.[1]) return img2[1];
+
+    // 6. OG image (limited for performance)
+    if (item.link && index < 10) {
       const og = await getOGImage(item.link);
       if (og) return og;
     }
+
   } catch {}
 
-  return FALLBACK_IMAGE;
+  // 7. fallback (unique image per item)
+  return `https://source.unsplash.com/600x400/?news,india&sig=${index}`;
 };
 
 // 🔥 MAIN FUNCTION
@@ -120,8 +123,8 @@ export const fetchRSS = async (lang: string) => {
       if (result.status === "fulfilled") {
         const source = cleanSourceName(result.value.title || "News");
 
-        // 🔥 LIMIT per feed (IMPORTANT)
-        const limitedItems = result.value.items.slice(0, 15);
+        // 🔥 limit per feed (performance control)
+        const limitedItems = result.value.items.slice(0, 20);
 
         const items = await Promise.all(
           limitedItems.map(async (item, index) => ({
