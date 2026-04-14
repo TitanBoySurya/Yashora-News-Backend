@@ -1,6 +1,7 @@
 import Parser from "rss-parser";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
-// ✅ Custom Fields setup for all types of images
 const parser = new Parser({
   customFields: {
     item: [
@@ -12,6 +13,7 @@ const parser = new Parser({
   },
 });
 
+// ✅ FEEDS
 const FEEDS: Record<string, string[]> = {
   hi: [
     "https://www.aajtak.in/rssfeeds/?id=home",
@@ -27,99 +29,130 @@ const FEEDS: Record<string, string[]> = {
     "https://www.thehindu.com/news/national/feeder/default.rss",
     "https://news.google.com/rss?hl=en-IN&gl=IN",
   ],
-  ta: ["https://zeenews.india.com/tamil/rss", "https://news.google.com/rss?hl=ta&gl=IN"],
-  te: ["https://zeenews.india.com/telugu/rss", "https://news.google.com/rss?hl=te&gl=IN"],
-  bn: ["https://zeenews.india.com/bengali/rss", "https://news.google.com/rss?hl=bn&gl=IN"],
-  mr: ["https://zeenews.india.com/marathi/rss", "https://news.google.com/rss?hl=mr&gl=IN"],
 };
 
-// 🔥 Source name cleanup
+// ✅ Source cleaner
 const cleanSourceName = (title: string): string => {
   if (!title) return "News";
-  const t = title.toLowerCase();
-  if (t.includes("aaj tak")) return "Aaj Tak";
-  if (t.includes("abp")) return "ABP News";
-  if (t.includes("zee news")) return "Zee News";
-  if (t.includes("ndtv")) return "NDTV";
-  if (t.includes("hindustan times")) return "Hindustan Times";
-  if (t.includes("times of india")) return "TOI";
-  if (t.includes("google news")) return "Google News";
-  return title.split(':')[0].split('-')[0].trim();
+  if (title.includes("Aaj Tak")) return "Aaj Tak";
+  if (title.includes("ABP")) return "ABP News";
+  if (title.includes("Zee News")) return "Zee News";
+  if (title.includes("NDTV")) return "NDTV";
+  if (title.includes("Hindustan Times")) return "Hindustan Times";
+  if (title.includes("Times of India")) return "TOI";
+  if (title.includes("Google News")) return "Google News";
+  return title.split(":")[0].split("-")[0].trim();
 };
 
-// 🔥 Multi-layer Image Extraction (Best Performance)
-const getBestImage = (item: any): string | null => {
+// 🔥 fallback (stable, not random heavy API)
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
+
+// 🔥 OG scraper (LIMITED USE)
+const getOGImage = async (url: string): Promise<string | null> => {
   try {
-    // 1. media:content (Most Common)
-    if (item["media:content"]) {
-      const media = Array.isArray(item["media:content"]) ? item["media:content"][0] : item["media:content"];
-      const url = media.url || (media.$ && media.$.url);
-      if (url) return url;
-    }
+    const { data } = await axios.get(url, {
+      timeout: 3000,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
 
-    // 2. enclosure (NDTV etc.)
-    if (item.enclosure && item.enclosure.url) {
-      return item.enclosure.url;
-    }
+    const $ = cheerio.load(data);
 
-    // 3. media:thumbnail
-    if (item["media:thumbnail"]) {
-      const thumb = Array.isArray(item["media:thumbnail"]) ? item["media:thumbnail"][0] : item["media:thumbnail"];
-      const url = thumb.url || (thumb.$ && thumb.$.url);
-      if (url) return url;
-    }
-
-    // 4. Content HTML Regex (For Google News & others)
-    const content = item["content:encoded"] || item.content || item.contentSnippet || "";
-    if (content) {
-      const imgMatch = content.match(/<img.*?src=["'](.*?)["']/);
-      if (imgMatch && imgMatch[1]) {
-        let imgUrl = imgMatch[1];
-        if (imgUrl.startsWith("//")) imgUrl = "https:" + imgUrl;
-        return imgUrl;
-      }
-    }
-  } catch (e) {
+    return (
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="og:image"]').attr("content") ||
+      null
+    );
+  } catch {
     return null;
   }
-  return null;
 };
 
+// 🔥 FINAL IMAGE LOGIC (optimized)
+const getBestImage = async (item: any, index: number): Promise<string> => {
+  try {
+    // 1. media:content
+    if (item["media:content"]?.length > 0) {
+      const url =
+        item["media:content"][0].url ||
+        item["media:content"][0]?.$?.url;
+      if (url) return url;
+    }
+
+    // 2. enclosure
+    if (item.enclosure?.url) return item.enclosure.url;
+
+    // 3. thumbnail
+    if (item["media:thumbnail"]) {
+      const url =
+        item["media:thumbnail"].url ||
+        item["media:thumbnail"]?.$?.url;
+      if (url) return url;
+    }
+
+    // 4. content html
+    const html = item["content:encoded"] || item.content || "";
+    const match = html.match(/<img.*?src=["'](.*?)["']/);
+    if (match?.[1]) return match[1];
+
+    // 5. 🔥 OG only for first few (performance save)
+    if (index < 5 && item.link) {
+      const og = await getOGImage(item.link);
+      if (og) return og;
+    }
+  } catch {}
+
+  return FALLBACK_IMAGE;
+};
+
+// 🔥 MAIN FUNCTION
 export const fetchRSS = async (lang: string) => {
   const urls = FEEDS[lang] || FEEDS["en"];
 
   try {
     const results = await Promise.allSettled(
-      urls.map((url: string) => parser.parseURL(url))
+      urls.map((url) => parser.parseURL(url))
     );
 
     let rawNews: any[] = [];
 
-    results.forEach((result) => {
+    for (const result of results) {
       if (result.status === "fulfilled") {
-        const cleanSource = cleanSourceName(result.value.title || "News");
-        
-        result.value.items.forEach(item => {
-          rawNews.push({
-            title: item.title || "Breaking News",
-            link: item.link,
+        const source = cleanSourceName(result.value.title || "News");
+
+        // 🔥 LIMIT per feed (IMPORTANT)
+        const limitedItems = result.value.items.slice(0, 15);
+
+        const items = await Promise.all(
+          limitedItems.map(async (item, index) => ({
+            title: item.title || "No Title",
+            link: item.link || "",
             contentSnippet: item.contentSnippet || "",
-            pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
-            source_name: cleanSource,
-            image_url: getBestImage(item) || "https://placehold.co/600x400?text=News" // Placeholder if no image found
-          });
-        });
+            pubDate:
+              item.pubDate ||
+              item.isoDate ||
+              new Date().toISOString(),
+            source_name: source,
+            image_url: await getBestImage(item, index),
+          }))
+        );
+
+        rawNews.push(...items);
       }
-    });
+    }
 
-    // 🔥 Duplicate remove by title
-    const uniqueNews = Array.from(new Map(rawNews.map(item => [item.title, item])).values());
+    // 🔥 remove duplicates
+    const uniqueNews = Array.from(
+      new Map(rawNews.map((item) => [item.title, item])).values()
+    );
 
-    // 🔥 Sort by latest and limit to 80
     return uniqueNews
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.pubDate).getTime() -
+          new Date(a.pubDate).getTime()
+      )
       .slice(0, 80);
-
   } catch (err) {
     console.error("RSS Fetch Error:", err);
     return [];
