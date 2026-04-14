@@ -13,7 +13,7 @@ const parser = new Parser({
   },
 });
 
-// ✅ FEEDS
+// ✅ FEEDS (IMPORTANT)
 const FEEDS: Record<string, string[]> = {
   hi: [
     "https://www.aajtak.in/rssfeeds/?id=home",
@@ -33,7 +33,6 @@ const FEEDS: Record<string, string[]> = {
 
 // ✅ Source cleaner
 const cleanSourceName = (title: string): string => {
-  if (!title) return "News";
   if (title.includes("Aaj Tak")) return "Aaj Tak";
   if (title.includes("ABP")) return "ABP News";
   if (title.includes("Zee News")) return "Zee News";
@@ -44,11 +43,15 @@ const cleanSourceName = (title: string): string => {
   return title.split(":")[0].split("-")[0].trim();
 };
 
-// 🔥 OG IMAGE SCRAPER
+// 🔥 fallback
+const getFallbackImage = () =>
+  `https://source.unsplash.com/600x400/?news,breaking&sig=${Math.random()}`;
+
+// 🔥 OG scraper
 const getOGImage = async (url: string): Promise<string | null> => {
   try {
     const { data } = await axios.get(url, {
-      timeout: 3000,
+      timeout: 4000,
       headers: { "User-Agent": "Mozilla/5.0" },
     });
 
@@ -64,48 +67,33 @@ const getOGImage = async (url: string): Promise<string | null> => {
   }
 };
 
-// 🔥 FINAL IMAGE LOGIC (BEST VERSION)
-const getBestImage = async (item: any, index: number): Promise<string> => {
+// 🔥 FINAL IMAGE LOGIC
+const getBestImage = async (item: any): Promise<string> => {
   try {
-    // 1. media:content
     if (item["media:content"]?.length > 0) {
-      const url =
-        item["media:content"][0].url ||
-        item["media:content"][0]?.$?.url;
+      const url = item["media:content"][0].url || item["media:content"][0]?.$?.url;
       if (url) return url;
     }
 
-    // 2. enclosure
     if (item.enclosure?.url) return item.enclosure.url;
 
-    // 3. thumbnail
     if (item["media:thumbnail"]) {
       const url =
-        item["media:thumbnail"].url ||
-        item["media:thumbnail"]?.$?.url;
+        item["media:thumbnail"].url || item["media:thumbnail"]?.$?.url;
       if (url) return url;
     }
 
-    // 4. content:encoded
-    const contentEncoded = item["content:encoded"] || "";
-    const img1 = contentEncoded.match(/<img.*?src=["'](.*?)["']/);
-    if (img1?.[1]) return img1[1];
+    const html = item["content:encoded"] || item.content || "";
+    const match = html.match(/<img.*?src=["'](.*?)["']/);
+    if (match?.[1]) return match[1];
 
-    // 5. 🔥 Hindi feeds fix (IMPORTANT)
-    const desc = item.content || item.contentSnippet || "";
-    const img2 = desc.match(/<img.*?src=["'](.*?)["']/);
-    if (img2?.[1]) return img2[1];
-
-    // 6. OG image (limited for performance)
-    if (item.link && index < 10) {
+    if (item.link) {
       const og = await getOGImage(item.link);
       if (og) return og;
     }
-
   } catch {}
 
-  // 7. fallback (unique image per item)
-  return `https://source.unsplash.com/600x400/?news,india&sig=${index}`;
+  return getFallbackImage();
 };
 
 // 🔥 MAIN FUNCTION
@@ -123,20 +111,14 @@ export const fetchRSS = async (lang: string) => {
       if (result.status === "fulfilled") {
         const source = cleanSourceName(result.value.title || "News");
 
-        // 🔥 limit per feed (performance control)
-        const limitedItems = result.value.items.slice(0, 20);
-
         const items = await Promise.all(
-          limitedItems.map(async (item, index) => ({
-            title: item.title || "No Title",
-            link: item.link || "",
+          result.value.items.map(async (item) => ({
+            title: item.title,
+            link: item.link,
             contentSnippet: item.contentSnippet || "",
-            pubDate:
-              item.pubDate ||
-              item.isoDate ||
-              new Date().toISOString(),
+            pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
             source_name: source,
-            image_url: await getBestImage(item, index),
+            image_url: await getBestImage(item),
           }))
         );
 
@@ -144,17 +126,10 @@ export const fetchRSS = async (lang: string) => {
       }
     }
 
-    // 🔥 remove duplicates
-    const uniqueNews = Array.from(
+    return Array.from(
       new Map(rawNews.map((item) => [item.title, item])).values()
-    );
-
-    return uniqueNews
-      .sort(
-        (a, b) =>
-          new Date(b.pubDate).getTime() -
-          new Date(a.pubDate).getTime()
-      )
+    )
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
       .slice(0, 80);
   } catch (err) {
     console.error("RSS Fetch Error:", err);
