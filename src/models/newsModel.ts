@@ -2,8 +2,8 @@ import { supabase } from "../config/supabase";
 
 /**
  * 📰 FAST NEWS FETCH (Cursor-based pagination)
- * first call → lastDate = undefined
- * next call → lastDate = last item ka published_at
+ * first call → lastDate = undefined (Taza news ke liye)
+ * next call → lastDate = aakhri article ki 'published_at' (Purani news ke liye)
  */
 export const findNewsByLang = async (
   lang: string,
@@ -15,11 +15,11 @@ export const findNewsByLang = async (
       .from("news_articles")
       .select("*")
       .eq("lang_code", lang)
-      .order("published_at", { ascending: false })
+      .order("published_at", { ascending: false }) // Sabse taza pehle
       .limit(limit);
 
-    // 🔥 cursor pagination (fast)
-    if (lastDate) {
+    // 🔥 Cursor Pagination: Agar user scroll kar raha hai toh purani news dikhao
+    if (lastDate && lastDate !== "first") {
       query = query.lt("published_at", lastDate);
     }
 
@@ -35,7 +35,8 @@ export const findNewsByLang = async (
 };
 
 /**
- * 🔁 Dedup check (optional use)
+ * 🔁 Duplicate Check
+ * Checks if a link already exists before trying to fetch AI/Extra data
  */
 export const checkNewsExists = async (link: string): Promise<boolean> => {
   try {
@@ -49,7 +50,6 @@ export const checkNewsExists = async (link: string): Promise<boolean> => {
       .maybeSingle();
 
     if (error) return false;
-
     return !!data;
   } catch {
     return false;
@@ -57,21 +57,20 @@ export const checkNewsExists = async (link: string): Promise<boolean> => {
 };
 
 /**
- * 🗄️ Insert / Upsert news
+ * 🗄️ Insert / Upsert News
+ * link par conflict check karega taaki duplicate na ho
  */
 export const insertNews = async (news: any) => {
   try {
     if (!news?.link) return;
 
-    const payload = {
-      ...news,
-      created_at: new Date().toISOString(),
-    };
-
+    // 'ignoreDuplicates: true' isse purani news ko touch nahi karega
+    // Jisse timestamp (published_at) kabhi nahi bigdega
     const { error } = await supabase
       .from("news_articles")
-      .upsert(payload, {
-        onConflict: "link", // 🔥 unique link required
+      .upsert(news, {
+        onConflict: "link",
+        ignoreDuplicates: true 
       });
 
     if (error) {
@@ -83,7 +82,8 @@ export const insertNews = async (news: any) => {
 };
 
 /**
- * 🧹 Delete old news (auto cleanup)
+ * 🧹 Auto Cleanup (Storage Bachane ke liye)
+ * 2 din se purani news apne aap saaf
  */
 export const deleteOldNews = async (days: number = 2) => {
   try {
@@ -98,7 +98,7 @@ export const deleteOldNews = async (days: number = 2) => {
     if (error) {
       console.error("❌ Cleanup Error:", error.message);
     } else {
-      console.log(`🧹 Deleted news older than ${days} days`);
+      console.log(`🧹 Database Refreshed: Removed news older than ${days} days`);
     }
   } catch (err: any) {
     console.error("❌ Cleanup Catch Error:", err.message);

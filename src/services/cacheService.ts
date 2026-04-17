@@ -8,7 +8,7 @@ export const getCache = async (key: string) => {
 export const setCache = async (
   key: string,
   value: any,
-  ttl = 1800
+  ttl = 60
 ) => {
   await redisClient.setEx(key, ttl, JSON.stringify(value));
 };
