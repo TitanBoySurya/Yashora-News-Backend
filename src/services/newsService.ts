@@ -1,64 +1,62 @@
 import { fetchRSS } from "./rssService";
-import { processContent } from "./aiService";
 import {
-  checkNewsExists,
   insertNews,
-  deleteOldNews, // Isse model mein add kar lena
+  deleteOldNews,
 } from "../models/newsModel";
 
-const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
 
 export const processNewsService = async (lang: string) => {
   try {
     console.log(`🚀 Starting News Process for: ${lang}`);
 
-    // 1. 🔥 AUTO-CLEANUP: 3 din se purani news apne aap delete karega
-    await deleteOldNews(3); 
+    // 🧹 cleanup
+    await deleteOldNews(3);
 
-    // 2. Fetch news from RSS (60-80 items for infinite feel)
+    // 📰 fetch
     const items = await fetchRSS(lang);
-    const limitedItems = items.slice(0, 80);
 
-    for (const item of limitedItems) {
-      if (!item.link || !item.title) continue;
+    const limitedItems = items.slice(0, 150);
 
-      try {
-        // 3. Duplicate Check
-        const exists = await checkNewsExists(item.link);
-        if (exists) continue;
+    // 🚀 PARALLEL PROCESSING (FAST)
+    await Promise.all(
+      limitedItems.map(async (item) => {
+        if (!item.link || !item.title) return;
 
-        // 4. 🧠 AI Processing (Full context for complete summary)
-        const aiInput = `Headline: ${item.title}. Details: ${item.contentSnippet || ""}`;
-        const summary = await processContent(aiInput, lang);
+        try {
+          const summary =
+            item.contentSnippet ||
+            item.title ||
+            "No description available";
 
-        // 5. 🖼️ Metadata Selection
-        const image_url = item.image_url || DEFAULT_IMAGE;
-        const source = item.source_name || "Yashora News";
-        
-        // Date ko ISO format mein hi rakhein taaki Android "Time Ago" nikal sake
-        const published_at = item.pubDate || item.isoDate || new Date().toISOString();
+          const image_url = item.image_url || DEFAULT_IMAGE;
 
-        // 6. 🗄️ Database Insertion
-        await insertNews({
-          title: item.title,
-          link: item.link,
-          summary: summary,
-          image_url: image_url,
-          source: source,
-          lang_code: lang,
-          published_at: published_at,
-        });
+          const source = item.source_name || "Global News";
 
-        console.log(`✅ News Stored: ${item.title.substring(0, 35)}...`);
+          const published_at =
+            item.pubDate ||
+            item.isoDate ||
+            new Date().toISOString();
 
-      } catch (err) {
-        console.error("⚠️ Skipping one item due to error");
-        continue;
-      }
-    }
-    
-    console.log(`✨ Process Finished for ${lang}. Database is Fresh!`);
+          // 🔥 Upsert handles duplicate (NO manual check needed)
+          await insertNews({
+            title: item.title,
+            link: item.link,
+            summary,
+            image_url,
+            source,
+            lang_code: lang,
+            published_at,
+          });
 
+        } catch (err) {
+          console.error("⚠️ Skip item");
+        }
+      })
+    );
+
+    console.log(`✨ Done for ${lang}`);
   } catch (err) {
     console.error("❌ News Service Error:", err);
   }

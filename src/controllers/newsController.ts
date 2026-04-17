@@ -2,58 +2,81 @@ import { Request, Response } from "express";
 import { findNewsByLang } from "../models/newsModel";
 import { getCache, setCache } from "../services/cacheService";
 
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
+
 export const getNewsController = async (req: Request, res: Response) => {
   try {
-    const lang = (req.query.lang as string) || "en";
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = 10;
-    const offset = (page - 1) * limit;
+    // ✅ language
+    const lang =
+      typeof req.query.lang === "string" ? req.query.lang : "en";
 
-    const cacheKey = `news_${lang}_page_${page}`;
+    // ✅ limit
+    const limit =
+      Number(req.query.limit) > 0 && Number(req.query.limit) <= 50
+        ? Number(req.query.limit)
+        : 20;
 
-    // ⚡ 1. Check Cache
+    // 🔥 cursor आधारित pagination (IMPORTANT)
+    const lastDate =
+      typeof req.query.lastDate === "string"
+        ? req.query.lastDate
+        : undefined;
+
+    const cacheKey = `news_${lang}_${lastDate || "first"}_${limit}`;
+
+    // ⚡ CACHE CHECK
     const cached = await getCache(cacheKey);
     if (cached) {
       return res.json({
-        success: true,
-        source: "cache",
         ...cached,
+        source: "cache",
       });
     }
 
-    // 🗄️ 2. DB fetch (Ensure your findNewsByLang uses limit and offset)
-    const data = await findNewsByLang(lang, limit, offset);
+    // 🗄️ DATABASE FETCH (cursor based)
+    const data = await findNewsByLang(lang, limit, lastDate);
 
-    // 🖼️ 3. Cleanup & Image Fallback
-    const articles = data.map((n: any) => ({
+    // 🖼️ CLEAN DATA
+    const articles = (data || []).map((n: any) => ({
       id: n.id,
-      title: n.title,
-      summary: n.summary || "AI is generating news summary...", // Fallback text
-      image_url: n.image_url && n.image_url.startsWith('http') 
-                  ? n.image_url 
-                  : "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop", // Professional fallback
-      link: n.link,
-      source: n.source || "News Update",
-      published_at: n.published_at
+      title: n.title || "No Title",
+      summary:
+        n.summary ||
+        n.content ||
+        "No description available",
+      image_url:
+        n.image_url && n.image_url.startsWith("http")
+          ? n.image_url
+          : DEFAULT_IMAGE,
+      link: n.link || "",
+      source: n.source || "Global News",
+      published_at: n.published_at || new Date().toISOString(),
     }));
+
+    // 🔥 next page ke liye cursor
+    const nextLastDate =
+      articles.length > 0
+        ? articles[articles.length - 1].published_at
+        : null;
 
     const response = {
       success: true,
-      source: "database",
-      page,
       count: articles.length,
+      lastDate: nextLastDate, // 👈 frontend isko use karega
       articles,
     };
 
-    // ⚡ 4. Save to Cache (Keep it for 15-30 mins only)
-    await setCache(cacheKey, response, 1800); 
+    // ⚡ CACHE SAVE
+    await setCache(cacheKey, response, 900);
 
     return res.json(response);
-  } catch (err) {
-    console.error("Controller Error:", err);
+  } catch (err: any) {
+    console.error("❌ Controller Error:", err.message);
+
     return res.status(500).json({
       success: false,
-      message: "Server Error",
+      message: "Internal Server Error",
     });
   }
 };

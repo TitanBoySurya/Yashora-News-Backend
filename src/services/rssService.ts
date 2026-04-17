@@ -3,6 +3,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const parser = new Parser({
+  timeout: 7000,
   customFields: {
     item: [
       ["media:content", "media:content", { keepArray: true }],
@@ -13,7 +14,7 @@ const parser = new Parser({
   },
 });
 
-// ✅ FEEDS (IMPORTANT)
+// 🌍 GLOBAL FEEDS (expandable)
 const FEEDS: Record<string, string[]> = {
   hi: [
     "https://www.aajtak.in/rssfeeds/?id=home",
@@ -27,27 +28,33 @@ const FEEDS: Record<string, string[]> = {
     "https://www.hindustantimes.com/feeds/rss/topnews/rssfeed.xml",
     "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
     "https://www.thehindu.com/news/national/feeder/default.rss",
-    "https://news.google.com/rss?hl=en-IN&gl=IN",
+    "https://rss.cnn.com/rss/edition.rss",
+    "https://feeds.bbci.co.uk/news/rss.xml",
+    "https://news.google.com/rss?hl=en-US&gl=US",
   ],
 };
 
-// ✅ Source cleaner
-const cleanSourceName = (title: string): string => {
-  if (title.includes("Aaj Tak")) return "Aaj Tak";
-  if (title.includes("ABP")) return "ABP News";
-  if (title.includes("Zee News")) return "Zee News";
-  if (title.includes("NDTV")) return "NDTV";
-  if (title.includes("Hindustan Times")) return "Hindustan Times";
-  if (title.includes("Times of India")) return "TOI";
-  if (title.includes("Google News")) return "Google News";
+// 🧠 source cleaner
+const cleanSourceName = (title: string) => {
+  if (!title) return "News";
   return title.split(":")[0].split("-")[0].trim();
 };
 
-// 🔥 fallback
-const getFallbackImage = () =>
-  `https://source.unsplash.com/600x400/?news,breaking&sig=${Math.random()}`;
+// 🖼️ fallback image (stable)
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
 
-// 🔥 OG scraper
+// 🔁 retry logic
+const fetchWithRetry = async (url: string, retries = 3) => {
+  try {
+    return await parser.parseURL(url);
+  } catch (err) {
+    if (retries > 0) return fetchWithRetry(url, retries - 1);
+    return null;
+  }
+};
+
+// 🔥 OG IMAGE (important for Hindi feeds)
 const getOGImage = async (url: string): Promise<string | null> => {
   try {
     const { data } = await axios.get(url, {
@@ -67,72 +74,97 @@ const getOGImage = async (url: string): Promise<string | null> => {
   }
 };
 
-// 🔥 FINAL IMAGE LOGIC
-const getBestImage = async (item: any): Promise<string> => {
+// 🔥 BEST IMAGE EXTRACTOR (STRONG VERSION)
+const getBestImage = async (item: any, index: number): Promise<string> => {
   try {
+    // 1️⃣ media:content
     if (item["media:content"]?.length > 0) {
-      const url = item["media:content"][0].url || item["media:content"][0]?.$?.url;
+      const url =
+        item["media:content"][0]?.url ||
+        item["media:content"][0]?.$?.url;
       if (url) return url;
     }
 
+    // 2️⃣ enclosure
     if (item.enclosure?.url) return item.enclosure.url;
 
+    // 3️⃣ thumbnail
     if (item["media:thumbnail"]) {
       const url =
-        item["media:thumbnail"].url || item["media:thumbnail"]?.$?.url;
+        item["media:thumbnail"]?.url ||
+        item["media:thumbnail"]?.$?.url;
       if (url) return url;
     }
 
-    const html = item["content:encoded"] || item.content || "";
-    const match = html.match(/<img.*?src=["'](.*?)["']/);
-    if (match?.[1]) return match[1];
+    // 4️⃣ content:encoded
+    const content = item["content:encoded"] || "";
+    const img1 = content.match(/<img.*?src=["'](.*?)["']/);
+    if (img1?.[1]) return img1[1];
 
-    if (item.link) {
+    // 5️⃣ description (Hindi fix 🔥)
+    const desc = item.content || item.contentSnippet || "";
+    const img2 = desc.match(/<img.*?src=["'](.*?)["']/);
+    if (img2?.[1]) return img2[1];
+
+    // 6️⃣ OG IMAGE (only for first few for performance)
+    if (item.link && index < 8) {
       const og = await getOGImage(item.link);
       if (og) return og;
     }
   } catch {}
 
-  return getFallbackImage();
+  return FALLBACK_IMAGE;
 };
 
-// 🔥 MAIN FUNCTION
+// 🚀 MAIN FUNCTION
 export const fetchRSS = async (lang: string) => {
   const urls = FEEDS[lang] || FEEDS["en"];
 
   try {
-    const results = await Promise.allSettled(
-      urls.map((url) => parser.parseURL(url))
+    const feeds = await Promise.all(
+      urls.map((url) => fetchWithRetry(url))
     );
 
     let rawNews: any[] = [];
 
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        const source = cleanSourceName(result.value.title || "News");
+    for (const feed of feeds) {
+      if (!feed) continue;
 
-        const items = await Promise.all(
-          result.value.items.map(async (item) => ({
-            title: item.title,
-            link: item.link,
-            contentSnippet: item.contentSnippet || "",
-            pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
-            source_name: source,
-            image_url: await getBestImage(item),
-          }))
-        );
+      const source = cleanSourceName(feed.title || "News");
 
-        rawNews.push(...items);
-      }
+      // 🔥 per feed limit ↑ (increase)
+      const items = await Promise.all(
+        feed.items.slice(0, 30).map(async (item, index) => ({
+          title: item.title || "No Title",
+          link: item.link || "",
+          contentSnippet: item.contentSnippet || "",
+          pubDate:
+            item.pubDate ||
+            item.isoDate ||
+            new Date().toISOString(),
+          source_name: source,
+          image_url: await getBestImage(item, index),
+        }))
+      );
+
+      rawNews.push(...items);
     }
 
-    return Array.from(
-      new Map(rawNews.map((item) => [item.title, item])).values()
-    )
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
-      .slice(0, 80);
+    // 🔥 remove duplicates by link
+    const uniqueNews = Array.from(
+      new Map(rawNews.map((item) => [item.link, item])).values()
+    );
+
+    return uniqueNews
+      .sort(
+        (a, b) =>
+          new Date(b.pubDate).getTime() -
+          new Date(a.pubDate).getTime()
+      )
+      .slice(0, 150); // 🔥 overall limit increase
+
   } catch (err) {
-    console.error("RSS Fetch Error:", err);
+    console.error("❌ RSS Fetch Error:", err);
     return [];
   }
 };

@@ -1,21 +1,29 @@
 import { supabase } from "../config/supabase";
 
 /**
- * 📰 Get news with pagination
- * Range logic: (0, 9) = Page 1, (10, 19) = Page 2
+ * 📰 FAST NEWS FETCH (Cursor-based pagination)
+ * first call → lastDate = undefined
+ * next call → lastDate = last item ka published_at
  */
 export const findNewsByLang = async (
   lang: string,
-  limit: number,
-  offset: number
+  limit: number = 20,
+  lastDate?: string
 ) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("news_articles")
       .select("*")
       .eq("lang_code", lang)
       .order("published_at", { ascending: false })
-      .range(offset, offset + limit - 1); 
+      .limit(limit);
+
+    // 🔥 cursor pagination (fast)
+    if (lastDate) {
+      query = query.lt("published_at", lastDate);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -27,39 +35,47 @@ export const findNewsByLang = async (
 };
 
 /**
- * 🔁 Dedup check
- * Checks if a news link already exists in the database
+ * 🔁 Dedup check (optional use)
  */
 export const checkNewsExists = async (link: string): Promise<boolean> => {
   try {
+    if (!link) return false;
+
     const { data, error } = await supabase
       .from("news_articles")
       .select("id")
       .eq("link", link)
+      .limit(1)
       .maybeSingle();
 
     if (error) return false;
+
     return !!data;
-  } catch (err) {
+  } catch {
     return false;
   }
 };
 
 /**
- * 🗄️ Insert news
- * Using upsert to prevent duplicates based on 'link'
+ * 🗄️ Insert / Upsert news
  */
 export const insertNews = async (news: any) => {
   try {
-    // 💡 Security check: Agar link null hai toh insert na karein
-    if (!news.link) return;
+    if (!news?.link) return;
+
+    const payload = {
+      ...news,
+      created_at: new Date().toISOString(),
+    };
 
     const { error } = await supabase
       .from("news_articles")
-      .upsert(news, { onConflict: 'link' });
+      .upsert(payload, {
+        onConflict: "link", // 🔥 unique link required
+      });
 
     if (error) {
-      console.error("❌ Insert/Upsert Error:", error.message);
+      console.error("❌ Insert Error:", error.message);
     }
   } catch (err: any) {
     console.error("❌ Insert Catch Error:", err.message);
@@ -67,10 +83,9 @@ export const insertNews = async (news: any) => {
 };
 
 /**
- * 🧹 Delete old news
- * Database ko saaf rakhne ke liye taaki sirf fresh news dikhe
+ * 🧹 Delete old news (auto cleanup)
  */
-export const deleteOldNews = async (days: number) => {
+export const deleteOldNews = async (days: number = 2) => {
   try {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -78,12 +93,12 @@ export const deleteOldNews = async (days: number) => {
     const { error } = await supabase
       .from("news_articles")
       .delete()
-      .lt("published_at", cutoffDate.toISOString()); 
+      .lt("published_at", cutoffDate.toISOString());
 
     if (error) {
       console.error("❌ Cleanup Error:", error.message);
     } else {
-      console.log(`🧹 Cleaned up news older than ${days} days`);
+      console.log(`🧹 Deleted news older than ${days} days`);
     }
   } catch (err: any) {
     console.error("❌ Cleanup Catch Error:", err.message);
