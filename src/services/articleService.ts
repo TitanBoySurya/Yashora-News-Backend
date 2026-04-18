@@ -1,67 +1,81 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 
-// 🔥 Clean article extractor (NO AI, pure original content)
-export const getFullArticle = async (url: string) => {
+export const getFullArticle = async (url: string): Promise<string> => {
   try {
     const { data } = await axios.get(url, {
-      timeout: 5000,
+      timeout: 8000,
       headers: {
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Referer": "https://www.google.com/", // 🔥 anti-block
       },
     });
 
     const $ = cheerio.load(data);
 
-    // 🔥 remove unwanted tags
-    $("script, style, noscript, iframe, ads, header, footer").remove();
+    // 🔥 1. Remove garbage elements
+    $(
+      "script, style, nav, footer, header, aside, iframe, noscript, .sidebar, .ads, .advertisement, .comment, .related, .promo"
+    ).remove();
 
-    let paragraphs: string[] = [];
-
-    // 🔥 Try multiple selectors (important for all sites)
+    // 🔥 2. Strong selectors (priority based)
     const selectors = [
       "article p",
-      ".story p",
-      ".content p",
-      ".article p",
+      '[itemprop="articleBody"] p',
+      ".article-body p",
+      ".story-content p",
+      ".content-inner p",
       ".post-content p",
       ".entry-content p",
-      ".td-post-content p",
-      ".story__content p",
+      "#article-body p",
     ];
 
-    for (const selector of selectors) {
-      const found = $(selector);
-      if (found.length > 5) {
-        found.each((_, el) => {
-          const text = $(el).text().trim();
-          if (text.length > 50) {
-            paragraphs.push(text);
-          }
-        });
+    let contentArr: string[] = [];
 
-        if (paragraphs.length > 0) break;
-      }
+    for (const selector of selectors) {
+      $(selector).each((_, el) => {
+        const text = $(el).text().trim();
+
+        // 🔥 strict filter
+        if (
+          text.length > 40 &&
+          !text.toLowerCase().includes("read more") &&
+          !text.toLowerCase().includes("click here")
+        ) {
+          contentArr.push(text);
+        }
+      });
+
+      if (contentArr.length > 5) break; // enough content मिला
     }
 
-    // 🔥 fallback (अगर structure अलग हो)
-    if (paragraphs.length === 0) {
+    // 🔥 3. Smart fallback (controlled)
+    if (contentArr.length === 0) {
       $("p").each((_, el) => {
         const text = $(el).text().trim();
-        if (text.length > 80) {
-          paragraphs.push(text);
+
+        if (
+          text.length > 80 &&
+          !text.toLowerCase().includes("privacy policy") &&
+          !text.toLowerCase().includes("advertisement")
+        ) {
+          contentArr.push(text);
         }
       });
     }
 
-    return {
-      content: paragraphs.join("\n\n"), // scrollable text
-    };
+    // 🔥 4. Remove duplicates (IMPORTANT)
+    const uniqueContent = Array.from(new Set(contentArr));
 
-  } catch (error) {
-    console.error("Article Fetch Error:", error);
-    return {
-      content: "Content not available",
-    };
+    // 🔥 5. Final clean output
+    let finalContent = uniqueContent.join("\n\n");
+
+    return finalContent.slice(0, 3500);
+  } catch (err: any) {
+    console.error("❌ Article Fetch Error:", err.message);
+    return "";
   }
 };
