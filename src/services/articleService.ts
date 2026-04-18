@@ -4,13 +4,15 @@ import * as cheerio from "cheerio";
 export const getFullArticle = async (url: string): Promise<string> => {
   try {
     const { data } = await axios.get(url, {
-      timeout: 8000,
+      timeout: 10000,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
         "Accept":
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Referer": "https://www.google.com/", // 🔥 anti-block
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "Connection": "keep-alive",
       },
     });
 
@@ -37,25 +39,39 @@ export const getFullArticle = async (url: string): Promise<string> => {
 
     for (const selector of selectors) {
       $(selector).each((_, el) => {
-        const text = $(el).text().trim();
+        let text = $(el).text().trim();
+
+        // 🔥 Clean HTML entities
+        text = text
+          .replace(/&#039;/g, "'")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&nbsp;/g, " ");
 
         // 🔥 strict filter
         if (
           text.length > 40 &&
           !text.toLowerCase().includes("read more") &&
-          !text.toLowerCase().includes("click here")
+          !text.toLowerCase().includes("click here") &&
+          !text.toLowerCase().includes("advertisement")
         ) {
           contentArr.push(text);
         }
       });
 
-      if (contentArr.length > 5) break; // enough content मिला
+      if (contentArr.length > 5) break;
     }
 
     // 🔥 3. Smart fallback (controlled)
     if (contentArr.length === 0) {
       $("p").each((_, el) => {
-        const text = $(el).text().trim();
+        let text = $(el).text().trim();
+
+        text = text
+          .replace(/&#039;/g, "'")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&nbsp;/g, " ");
 
         if (
           text.length > 80 &&
@@ -67,15 +83,32 @@ export const getFullArticle = async (url: string): Promise<string> => {
       });
     }
 
-    // 🔥 4. Remove duplicates (IMPORTANT)
+    // 🔥 4. Remove duplicates
     const uniqueContent = Array.from(new Set(contentArr));
 
-    // 🔥 5. Final clean output
     let finalContent = uniqueContent.join("\n\n");
 
+    // 🔥 5. 🚨 IMPORTANT: Empty / blocked site fallback
+    if (!finalContent || finalContent.length < 120) {
+      return `⚠️ Full article load नहीं हो पाया।
+
+👉 यह वेबसाइट content block कर रही है।
+
+🔗 पूरा पढ़ने के लिए नीचे link खोलें:
+${url}`;
+    }
+
+    // 🔥 6. Final trim
     return finalContent.slice(0, 3500);
+
   } catch (err: any) {
     console.error("❌ Article Fetch Error:", err.message);
-    return "";
+
+    return `⚠️ Article fetch नहीं हो पाया।
+
+👉 Internet issue या website block कर रही है।
+
+🔗 Direct link खोलें:
+${url}`;
   }
 };
