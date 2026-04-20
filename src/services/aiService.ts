@@ -1,41 +1,104 @@
 import axios from "axios";
+import dotenv from "dotenv";
 
-export const processContent = async (text: string, lang: string) => {
+dotenv.config();
+
+// 🔥 MAIN FUNCTION
+export const generateSummary = async (text: string): Promise<string> => {
   try {
-    const res = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4o-mini", // Sasta aur fast model, perfect hai
-        messages: [
-          {
-            role: "system",
-            content: `You are a professional news editor. 
-            Tasks:
-            1. Summarize the news in exactly 80-100 words.
-            2. Language: Must be in ${lang}.
-            3. Tone: Informative and engaging.
-            4. Completion: Ensure the last sentence is full and complete. Do not cut off in the middle.
-            5. Content: Do not include any HTML tags or links.`,
-          },
-          {
-            role: "user",
-            content: text,
-          },
-        ],
-        max_tokens: 300, // Taaki summary puri aaye aur beech mein na kate
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-      }
-    );
+    return await geminiSummary(text);
+  } catch (e) {
+    console.log("⚠️ Gemini failed → DeepSeek");
 
-    return res.data.choices[0].message.content.trim();
-  } catch (error) {
-    console.error("AI Service Error:", error);
-    // Fallback: Agar AI fail ho jaye toh kam se kam text toh dikhe
-    return text.length > 160 ? text.slice(0, 157) + "..." : text;
+    try {
+      return await deepseekSummary(text);
+    } catch (e) {
+      console.log("⚠️ DeepSeek failed → Grok");
+
+      try {
+        return await grokSummary(text);
+      } catch (e) {
+        console.log("⚠️ All failed → local fallback");
+        return localSummary(text);
+      }
+    }
   }
+};
+
+
+// ================= GEMINI =================
+const geminiSummary = async (text: string) => {
+  const res = await axios.post(
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      contents: [
+        {
+          parts: [
+            {
+              text: `Summarize this news in Hindi in 5 points:\n${text}`
+            }
+          ]
+        }
+      ]
+    }
+  );
+
+  return res.data.candidates[0].content.parts[0].text;
+};
+
+
+// ================= DEEPSEEK =================
+const deepseekSummary = async (text: string) => {
+  const res = await axios.post(
+    "https://api.deepseek.com/v1/chat/completions",
+    {
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "user",
+          content: `Summarize in simple Hindi:\n${text}`
+        }
+      ]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return res.data.choices[0].message.content;
+};
+
+
+// ================= GROK (xAI) =================
+const grokSummary = async (text: string) => {
+  const res = await axios.post(
+    "https://api.x.ai/v1/chat/completions",
+    {
+      model: "grok-1",
+      messages: [
+        {
+          role: "user",
+          content: `Summarize this news:\n${text}`
+        }
+      ]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return res.data.choices[0].message.content;
+};
+
+
+// ================= LOCAL FALLBACK =================
+const localSummary = (text: string) => {
+  const sentences = text.split(". ");
+  return sentences.slice(0, 3).join(". ") + ".";
 };
