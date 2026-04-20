@@ -6,47 +6,44 @@ import { getFullArticle } from "./articleService";
 const DEFAULT_IMAGE =
   "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
 
-// 🔥 Delay helper (rate limit बचाने के लिए)
+// ⏳ Delay (rate limit + anti-block)
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 export const processNewsService = async (lang: string) => {
   try {
     console.log(`🚀 Starting News Process for: ${lang}`);
 
-    // 🧹 Delete old news
+    // 🧹 Old news delete (3 days)
     await deleteOldNews(3);
 
-    // 📰 Fetch RSS
+    // 📰 RSS Fetch
     const items = await fetchRSS(lang);
 
     const limitedItems = items.slice(0, 40); // 🔥 safe limit
 
-    // 🛡️ SAFE PROCESSING (no Promise.all)
+    let index = 0;
+
     for (const item of limitedItems) {
       if (!item.link || !item.title) continue;
 
       try {
-        // 🔥 1. Fetch full article
-        let fullContent = "";
-        try {
-          fullContent = await getFullArticle(item.link);
-        } catch {
-          console.log("⚠️ Article fetch failed");
-        }
-
-        // 🔥 2. Clean content check
-        if (fullContent && fullContent.length < 100) {
-          fullContent = "";
-        }
-
-        // 🔥 3. Generate summary (AI only if useful content)
         let summary = item.summary || item.title;
+        let fullContent = "";
 
-        if (fullContent) {
+        // 🔥 ONLY TOP NEWS → scrape + AI
+        if (index < 5) {
           try {
-            summary = await generateSummary(fullContent);
+            fullContent = await getFullArticle(item.link);
+
+            if (fullContent && fullContent.length > 200) {
+              try {
+                summary = await generateSummary(fullContent);
+              } catch {
+                console.log("⚠️ AI failed → fallback summary used");
+              }
+            }
           } catch {
-            console.log("⚠️ AI failed → fallback used");
+            console.log("⚠️ Scraper failed → skipping AI");
           }
         }
 
@@ -55,7 +52,7 @@ export const processNewsService = async (lang: string) => {
         const published_at =
           item.published_at || new Date().toISOString();
 
-        // 🔥 4. Save to DB
+        // 💾 Save
         await insertNews({
           title: item.title,
           link: item.link,
@@ -66,8 +63,10 @@ export const processNewsService = async (lang: string) => {
           published_at,
         });
 
-        // 🔥 5. Delay (VERY IMPORTANT)
-        await delay(800); // 0.8 sec gap (API safe)
+        index++;
+
+        // ⏳ Delay (important)
+        await delay(index < 5 ? 1200 : 400);
 
       } catch (err) {
         console.error(`⚠️ Skip: ${item.link}`);
