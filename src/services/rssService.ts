@@ -1,7 +1,8 @@
 import Parser from "rss-parser";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 const parser = new Parser({
-  timeout: 10000,
   customFields: {
     item: [
       ["media:content", "media:content", { keepArray: true }],
@@ -12,171 +13,126 @@ const parser = new Parser({
   },
 });
 
-// 🌍 ALL LANGUAGES + CATEGORIES
-const FEEDS: Record<string, Record<string, string[]>> = {
-  hi: {
-    general: [
-      "https://www.aajtak.in/rssfeeds/?id=home",
-      "https://www.abplive.com/rss",
-      "https://zeenews.india.com/hindi/rss",
-      "https://ndtv.in/rss",
-    ],
-    sports: [
-      "https://www.aajtak.in/rssfeeds/?id=sports",
-      "https://zeenews.india.com/hindi/sports/rss",
-      "https://ndtv.in/rss/sports",
-    ],
-    business: [
-      "https://zeenews.india.com/hindi/business/rss",
-      "https://ndtv.in/rss/business",
-    ],
-    tech: [
-      "https://zeenews.india.com/hindi/science-technology/rss",
-    ],
-  },
-
-  en: {
-    general: [
-      "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
-      "https://feeds.feedburner.com/ndtvnews-top-stories",
-      "https://www.hindustantimes.com/feeds/rss/topnews/rssfeed.xml",
-    ],
-    sports: [
-      "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",
-    ],
-    business: [
-      "https://timesofindia.indiatimes.com/rssfeeds/1898055.cms",
-    ],
-    tech: [
-      "https://timesofindia.indiatimes.com/rssfeeds/66949542.cms",
-    ],
-  },
-
-  mr: { general: ["https://zeenews.india.com/marathi/rss"] },
-  gu: { general: ["https://zeenews.india.com/gujarati/rss"] },
-  ta: { general: ["https://zeenews.india.com/tamil/rss"] },
-  te: { general: ["https://zeenews.india.com/telugu/rss"] },
-  kn: { general: ["https://zeenews.india.com/kannada/rss"] },
-  ml: { general: ["https://zeenews.india.com/malayalam/rss"] },
-  bn: {
-    general: [
-      "https://zeenews.india.com/bengali/rss",
-      "https://www.anandabazar.com/rss-feed",
-    ],
-  },
-  pa: { general: ["https://zeenews.india.com/punjabi/rss"] },
-  or: { general: ["https://zeenews.india.com/odia/rss"] },
+// ✅ FEEDS (IMPORTANT)
+const FEEDS: Record<string, string[]> = {
+  hi: [
+    "https://www.aajtak.in/rssfeeds/?id=home",
+    "https://www.abplive.com/rss",
+    "https://zeenews.india.com/hindi/rss",
+    "https://ndtv.in/rss",
+    "https://news.google.com/rss?hl=hi&gl=IN",
+  ],
+  en: [
+    "https://feeds.feedburner.com/ndtvnews-top-stories",
+    "https://www.hindustantimes.com/feeds/rss/topnews/rssfeed.xml",
+    "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+    "https://www.thehindu.com/news/national/feeder/default.rss",
+    "https://news.google.com/rss?hl=en-IN&gl=IN",
+  ],
 };
 
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
+// ✅ Source cleaner
+const cleanSourceName = (title: string): string => {
+  if (title.includes("Aaj Tak")) return "Aaj Tak";
+  if (title.includes("ABP")) return "ABP News";
+  if (title.includes("Zee News")) return "Zee News";
+  if (title.includes("NDTV")) return "NDTV";
+  if (title.includes("Hindustan Times")) return "Hindustan Times";
+  if (title.includes("Times of India")) return "TOI";
+  if (title.includes("Google News")) return "Google News";
+  return title.split(":")[0].split("-")[0].trim();
+};
 
-// 🔁 Retry Logic
-const fetchWithRetry = async (url: string, retries = 2): Promise<any> => {
+// 🔥 fallback
+const getFallbackImage = () =>
+  `https://source.unsplash.com/600x400/?news,breaking&sig=${Math.random()}`;
+
+// 🔥 OG scraper
+const getOGImage = async (url: string): Promise<string | null> => {
   try {
-    return await parser.parseURL(url);
+    const { data } = await axios.get(url, {
+      timeout: 4000,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    const $ = cheerio.load(data);
+
+    return (
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="og:image"]').attr("content") ||
+      null
+    );
   } catch {
-    if (retries > 0) return fetchWithRetry(url, retries - 1);
     return null;
   }
 };
 
-// 🧹 Clean text (HTML remove)
-const cleanText = (text: string) => {
-  return text
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-// 🖼️ BEST IMAGE (FINAL FIXED)
+// 🔥 FINAL IMAGE LOGIC
 const getBestImage = async (item: any): Promise<string> => {
   try {
     if (item["media:content"]?.length > 0) {
-      return (
-        item["media:content"][0]?.url ||
-        item["media:content"][0]?.$?.url
-      );
-    }
-
-    if (item["media:thumbnail"]?.url) {
-      return item["media:thumbnail"].url;
+      const url = item["media:content"][0].url || item["media:content"][0]?.$?.url;
+      if (url) return url;
     }
 
     if (item.enclosure?.url) return item.enclosure.url;
 
-    const desc =
-      item["content:encoded"] ||
-      item.content ||
-      item.contentSnippet ||
-      "";
+    if (item["media:thumbnail"]) {
+      const url =
+        item["media:thumbnail"].url || item["media:thumbnail"]?.$?.url;
+      if (url) return url;
+    }
 
-    const imgMatch = desc.match(/<img.*?src=["'](.*?)["']/);
+    const html = item["content:encoded"] || item.content || "";
+    const match = html.match(/<img.*?src=["'](.*?)["']/);
+    if (match?.[1]) return match[1];
 
-    if (imgMatch?.[1]) return imgMatch[1];
+    if (item.link) {
+      const og = await getOGImage(item.link);
+      if (og) return og;
+    }
   } catch {}
 
-  return FALLBACK_IMAGE;
+  return getFallbackImage();
 };
 
-// 🚀 MAIN FUNCTION
-export const fetchRSS = async (
-  lang: string,
-  category: string = "general"
-) => {
-  try {
-    const langFeeds = FEEDS[lang] || FEEDS["en"];
-    const urls = langFeeds[category] || langFeeds["general"];
+// 🔥 MAIN FUNCTION
+export const fetchRSS = async (lang: string) => {
+  const urls = FEEDS[lang] || FEEDS["en"];
 
-    const feeds = await Promise.all(
-      urls.map((url) => fetchWithRetry(url))
+  try {
+    const results = await Promise.allSettled(
+      urls.map((url) => parser.parseURL(url))
     );
 
     let rawNews: any[] = [];
 
-    for (const feed of feeds) {
-      if (!feed) continue;
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        const source = cleanSourceName(result.value.title || "News");
 
-      const source =
-        feed.title?.split(":")[0]?.trim() || "News";
+        const items = await Promise.all(
+          result.value.items.map(async (item) => ({
+            title: item.title,
+            link: item.link,
+            contentSnippet: item.contentSnippet || "",
+            pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
+            source_name: source,
+            image_url: await getBestImage(item),
+          }))
+        );
 
-      for (const item of feed.items.slice(0, 10)) {
-        if (!item.link || !item.title) continue;
-
-        const summaryRaw =
-          item.contentSnippet ||
-          item["content:encoded"] ||
-          "";
-
-        const summary = cleanText(summaryRaw).slice(0, 220);
-
-        rawNews.push({
-          title: cleanText(item.title),
-          link: item.link,
-          summary: summary || "Read full story",
-          published_at:
-            item.isoDate || new Date().toISOString(),
-          source,
-          image_url: await getBestImage(item),
-          lang_code: lang,
-          category,
-        });
+        rawNews.push(...items);
       }
     }
 
-    // 🔥 Remove duplicates
-    const uniqueNews = Array.from(
-      new Map(rawNews.map((i) => [i.link, i])).values()
-    );
-
-    // 🔥 Sort latest first
-    return uniqueNews.sort(
-      (a, b) =>
-        new Date(b.published_at).getTime() -
-        new Date(a.published_at).getTime()
-    );
+    return Array.from(
+      new Map(rawNews.map((item) => [item.title, item])).values()
+    )
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .slice(0, 80);
   } catch (err) {
-    console.error("❌ RSS Fetch Error:", err);
+    console.error("RSS Fetch Error:", err);
     return [];
   }
 };
