@@ -7,12 +7,19 @@ import { getFullArticle } from "../services/articleService";
 const DEFAULT_IMAGE =
   "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
 
-// 📰 NEWS LIST API (Cursor Pagination)
+/**
+ * 📰 NEWS LIST API (Lang + Category + Pagination)
+ */
 export const getNewsController = async (req: Request, res: Response) => {
   try {
-    // ✅ Safe inputs
+    // ✅ Inputs
     const lang =
       typeof req.query.lang === "string" ? req.query.lang : "en";
+
+    const category =
+      typeof req.query.category === "string"
+        ? req.query.category
+        : "general";
 
     const limit =
       Number(req.query.limit) > 0 && Number(req.query.limit) <= 50
@@ -24,10 +31,10 @@ export const getNewsController = async (req: Request, res: Response) => {
         ? req.query.lastDate
         : undefined;
 
-    // 🔥 Unique cache key
-    const cacheKey = `news_${lang}_${lastDate || "latest"}_${limit}`;
+    // 🔥 Cache key
+    const cacheKey = `news_${lang}_${category}_${lastDate || "latest"}_${limit}`;
 
-    // ⚡ CACHE CHECK
+    // ⚡ Cache check
     const cached = await getCache(cacheKey);
     if (cached) {
       return res.json({
@@ -36,17 +43,19 @@ export const getNewsController = async (req: Request, res: Response) => {
       });
     }
 
-    // 🗄️ DATABASE FETCH (cursor based)
-    const data = await findNewsByLang(lang, limit, lastDate);
+    // 🗄️ DB fetch
+    const data = await findNewsByLang(
+      lang,
+      category,
+      limit,
+      lastDate
+    );
 
-    // 🧹 CLEAN DATA
+    // 🧹 Clean response
     const articles = (data || []).map((n: any) => ({
       id: n.id,
       title: n.title || "Yashora News Update",
-      summary:
-        n.summary ||
-        n.content ||
-        "Tap to read full article",
+      summary: n.summary || "Tap to read full article",
       image_url:
         n.image_url && n.image_url.startsWith("http")
           ? n.image_url
@@ -57,7 +66,7 @@ export const getNewsController = async (req: Request, res: Response) => {
         n.published_at || new Date().toISOString(),
     }));
 
-    // 🔥 NEXT CURSOR
+    // 🔥 Next cursor
     const nextLastDate =
       articles.length > 0
         ? articles[articles.length - 1].published_at
@@ -70,13 +79,14 @@ export const getNewsController = async (req: Request, res: Response) => {
       articles,
     };
 
-    // ⚡ CACHE SAVE (60 sec = fresh feel)
+    // ⚡ Cache save
     await setCache(cacheKey, response, 60);
 
     return res.json({
       ...response,
       source: "database",
     });
+
   } catch (err: any) {
     console.error("❌ Controller Error:", err.message);
 
@@ -87,7 +97,10 @@ export const getNewsController = async (req: Request, res: Response) => {
   }
 };
 
-// 📖 FULL ARTICLE API
+
+/**
+ * 📖 FULL ARTICLE API
+ */
 export const getArticleController = async (
   req: Request,
   res: Response
@@ -109,7 +122,6 @@ export const getArticleController = async (
 
     const content = await getFullArticle(url);
 
-    // 🔥 Empty content protection
     if (!content || content.length < 50) {
       return res.json({
         success: false,
@@ -121,6 +133,7 @@ export const getArticleController = async (
       success: true,
       content,
     });
+
   } catch (err: any) {
     console.error("❌ Article Error:", err.message);
 
