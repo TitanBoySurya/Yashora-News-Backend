@@ -1,4 +1,6 @@
 import Parser from "rss-parser";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 const parser = new Parser({
   timeout: 10000,
@@ -12,23 +14,20 @@ const parser = new Parser({
   },
 });
 
-// 🌍 ALL LANGUAGES + CATEGORIES
+// 🌍 CATEGORY BASED FEEDS
 const FEEDS: Record<string, Record<string, string[]>> = {
   hi: {
     general: [
       "https://www.aajtak.in/rssfeeds/?id=home",
       "https://www.abplive.com/rss",
       "https://zeenews.india.com/hindi/rss",
-      "https://ndtv.in/rss",
     ],
     sports: [
       "https://www.aajtak.in/rssfeeds/?id=sports",
       "https://zeenews.india.com/hindi/sports/rss",
-      "https://ndtv.in/rss/sports",
     ],
     business: [
       "https://zeenews.india.com/hindi/business/rss",
-      "https://ndtv.in/rss/business",
     ],
     tech: [
       "https://zeenews.india.com/hindi/science-technology/rss",
@@ -39,7 +38,6 @@ const FEEDS: Record<string, Record<string, string[]>> = {
     general: [
       "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
       "https://feeds.feedburner.com/ndtvnews-top-stories",
-      "https://www.hindustantimes.com/feeds/rss/topnews/rssfeed.xml",
     ],
     sports: [
       "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",
@@ -51,27 +49,13 @@ const FEEDS: Record<string, Record<string, string[]>> = {
       "https://timesofindia.indiatimes.com/rssfeeds/66949542.cms",
     ],
   },
-
-  mr: { general: ["https://zeenews.india.com/marathi/rss"] },
-  gu: { general: ["https://zeenews.india.com/gujarati/rss"] },
-  ta: { general: ["https://zeenews.india.com/tamil/rss"] },
-  te: { general: ["https://zeenews.india.com/telugu/rss"] },
-  kn: { general: ["https://zeenews.india.com/kannada/rss"] },
-  ml: { general: ["https://zeenews.india.com/malayalam/rss"] },
-  bn: {
-    general: [
-      "https://zeenews.india.com/bengali/rss",
-      "https://www.anandabazar.com/rss-feed",
-    ],
-  },
-  pa: { general: ["https://zeenews.india.com/punjabi/rss"] },
-  or: { general: ["https://zeenews.india.com/odia/rss"] },
 };
 
+// 🖼️ fallback
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1504711434969-e33886168f5c";
 
-// 🔁 Retry Logic
+// 🔁 Retry
 const fetchWithRetry = async (url: string, retries = 2): Promise<any> => {
   try {
     return await parser.parseURL(url);
@@ -81,7 +65,7 @@ const fetchWithRetry = async (url: string, retries = 2): Promise<any> => {
   }
 };
 
-// 🧹 Clean text (HTML remove)
+// 🧹 Clean text
 const cleanText = (text: string) => {
   return text
     .replace(/<[^>]+>/g, "")
@@ -89,31 +73,63 @@ const cleanText = (text: string) => {
     .trim();
 };
 
-// 🖼️ BEST IMAGE (FINAL FIXED)
+// 🔥 OG IMAGE SCRAPER (old wala powerful logic)
+const getOGImage = async (url: string): Promise<string | null> => {
+  try {
+    const { data } = await axios.get(url, {
+      timeout: 4000,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    const $ = cheerio.load(data);
+
+    return (
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="og:image"]').attr("content") ||
+      null
+    );
+  } catch {
+    return null;
+  }
+};
+
+// 🖼️ BEST IMAGE (FINAL FIX)
 const getBestImage = async (item: any): Promise<string> => {
   try {
+    // 1. media content
     if (item["media:content"]?.length > 0) {
-      return (
+      const url =
         item["media:content"][0]?.url ||
-        item["media:content"][0]?.$?.url
-      );
+        item["media:content"][0]?.$?.url;
+      if (url) return url;
     }
 
-    if (item["media:thumbnail"]?.url) {
-      return item["media:thumbnail"].url;
-    }
-
+    // 2. enclosure
     if (item.enclosure?.url) return item.enclosure.url;
 
-    const desc =
+    // 3. thumbnail
+    if (item["media:thumbnail"]) {
+      const url =
+        item["media:thumbnail"].url ||
+        item["media:thumbnail"]?.$?.url;
+      if (url) return url;
+    }
+
+    // 4. html image
+    const html =
       item["content:encoded"] ||
       item.content ||
       item.contentSnippet ||
       "";
 
-    const imgMatch = desc.match(/<img.*?src=["'](.*?)["']/);
+    const match = html.match(/<img.*?src=["'](.*?)["']/);
+    if (match?.[1]) return match[1];
 
-    if (imgMatch?.[1]) return imgMatch[1];
+    // 5. OG Image (🔥 strongest fallback)
+    if (item.link) {
+      const og = await getOGImage(item.link);
+      if (og) return og;
+    }
   } catch {}
 
   return FALLBACK_IMAGE;
@@ -132,7 +148,7 @@ export const fetchRSS = async (
       urls.map((url) => fetchWithRetry(url))
     );
 
-    let rawNews: any[] = [];
+    let news: any[] = [];
 
     for (const feed of feeds) {
       if (!feed) continue;
@@ -140,7 +156,8 @@ export const fetchRSS = async (
       const source =
         feed.title?.split(":")[0]?.trim() || "News";
 
-      for (const item of feed.items.slice(0, 10)) {
+      // 🔥 IMPORTANT: HAR FEED SE SIRF 5 NEWS
+      for (const item of feed.items.slice(0, 5)) {
         if (!item.link || !item.title) continue;
 
         const summaryRaw =
@@ -148,35 +165,34 @@ export const fetchRSS = async (
           item["content:encoded"] ||
           "";
 
-        const summary = cleanText(summaryRaw).slice(0, 220);
-
-        rawNews.push({
+        news.push({
           title: cleanText(item.title),
           link: item.link,
-          summary: summary || "Read full story",
+          summary: cleanText(summaryRaw).slice(0, 200),
+          image_url: await getBestImage(item),
+          source,
           published_at:
             item.isoDate || new Date().toISOString(),
-          source,
-          image_url: await getBestImage(item),
           lang_code: lang,
           category,
         });
       }
     }
 
-    // 🔥 Remove duplicates
-    const uniqueNews = Array.from(
-      new Map(rawNews.map((i) => [i.link, i])).values()
+    // 🔥 REMOVE DUPLICATE
+    const unique = Array.from(
+      new Map(news.map((n) => [n.link, n])).values()
     );
 
-    // 🔥 Sort latest first
-    return uniqueNews.sort(
+    // 🔥 SORT LATEST FIRST
+    return unique.sort(
       (a, b) =>
         new Date(b.published_at).getTime() -
         new Date(a.published_at).getTime()
     );
+
   } catch (err) {
-    console.error("❌ RSS Fetch Error:", err);
+    console.error("❌ RSS Error:", err);
     return [];
   }
 };
