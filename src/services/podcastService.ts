@@ -2,6 +2,9 @@ import Parser from "rss-parser";
 
 const parser = new Parser({
   timeout: 15000,
+  headers: {
+    "User-Agent": "Mozilla/5.0"
+  },
   customFields: {
     item: [
       ["itunes:image", "itunes_image"],
@@ -10,25 +13,44 @@ const parser = new Parser({
   }
 });
 
-// 🎧 UPDATED PODCAST FEEDS (Hindi + English)
-const PODCAST_FEEDS: Record<string, string[]> = {
+// 🎧 PODCAST FEEDS WITH LANGUAGE
+const PODCAST_FEEDS: Record<
+  string,
+  { url: string; language: "hi" | "en" }[]
+> = {
   motivational: [
-    "https://feeds.simplecast.com/54nAGcIl", // The Mindset Mentor
-    "https://feeds.megaphone.fm/WWO3519750118", // Motivation Daily
-    "https://anchor.fm/s/125a3d0c/podcast/rss" // Hindi Motivation
+    // English
+    { url: "https://feeds.simplecast.com/54nAGcIl", language: "en" },
+    { url: "https://feeds.megaphone.fm/WWO3519750118", language: "en" },
+
+    // Hindi
+    { url: "https://anchor.fm/s/125a3d0c/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/6d21b8c/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/3efb4c38/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/70c1a1c/podcast/rss", language: "hi" }
   ],
 
   news: [
-    "https://feeds.a.dj.com/rss/RSSWhatsNews.xml", // WSJ
-    "https://feeds.npr.org/500005/podcast.xml", // NPR
-    "https://feeds.bbci.co.uk/news/world/rss.xml", // BBC
-    "https://podcasts.files.bbci.co.uk/p02nq0gn.rss" // BBC Global News Podcast
+    // English
+    { url: "https://feeds.a.dj.com/rss/RSSWhatsNews.xml", language: "en" },
+    { url: "https://feeds.npr.org/500005/podcast.xml", language: "en" },
+    { url: "https://feeds.bbci.co.uk/news/world/rss.xml", language: "en" },
+    { url: "https://podcasts.files.bbci.co.uk/p02nq0gn.rss", language: "en" },
+
+    // Hindi / India
+    { url: "https://feeds.feedburner.com/ndtvnews-top-stories", language: "hi" }
   ],
 
   stories: [
-    "https://feeds.simplecast.com/8kXvPz0X", // Stories
-    "https://anchor.fm/s/3b7c0a00/podcast/rss", // Hindi Kahaniyan
-    "https://audioboom.com/channels/2399216.rss" // Short Stories
+    // English
+    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" },
+    { url: "https://audioboom.com/channels/2399216.rss", language: "en" },
+
+    // Hindi
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/2a1f0e54/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/1d9f8e88/podcast/rss", language: "hi" },
+    { url: "https://anchor.fm/s/34a3f1c0/podcast/rss", language: "hi" }
   ]
 };
 
@@ -45,21 +67,24 @@ const fetchWithRetry = async (url: string, retries = 2): Promise<any> => {
 // 🚀 MAIN FUNCTION
 export const fetchPodcasts = async (category: string = "motivational") => {
   try {
-    const urls = PODCAST_FEEDS[category] || PODCAST_FEEDS["motivational"];
+    const feedsConfig =
+      PODCAST_FEEDS[category] || PODCAST_FEEDS["motivational"];
 
     const feeds = await Promise.all(
-      urls.map((url) => fetchWithRetry(url))
+      feedsConfig.map((f) => fetchWithRetry(f.url))
     );
 
     let podcasts: any[] = [];
 
-    for (const feed of feeds) {
+    for (let i = 0; i < feeds.length; i++) {
+      const feed = feeds[i];
+      const lang = feedsConfig[i].language;
+
       if (!feed) continue;
 
       const source = feed.title || "Podcast";
 
       for (const item of feed.items) {
-
         const audioUrl =
           item.enclosure?.url ||
           item.enclosure?.["$"]?.url ||
@@ -67,10 +92,12 @@ export const fetchPodcasts = async (category: string = "motivational") => {
 
         if (!audioUrl) continue;
 
-        // 🔥 IMAGE FIX (multi fallback)
+        if (!item.title || item.title.length < 5) continue;
+        if (item.title.toLowerCase().includes("trailer")) continue;
+
+        // 🔥 IMAGE FIX
         const image =
           item.itunes?.image?.href ||
-          item.itunes?.image ||
           item.itunes_image?.["$"]?.href ||
           feed.image?.url ||
           "https://images.unsplash.com/photo-1478737270239-2f02b77fc618";
@@ -86,7 +113,11 @@ export const fetchPodcasts = async (category: string = "motivational") => {
             "5 min",
           published_at:
             item.pubDate || new Date().toISOString(),
-          source: source
+          source: source,
+          category,
+
+          // 🔥 LANGUAGE (IMPORTANT)
+          language: lang
         });
       }
     }
