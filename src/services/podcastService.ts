@@ -7,9 +7,10 @@ type PodcastType = {
   audio_url: string;
   description: string;
   image_url: string;
-  duration: string;
+  duration_sec: number; // ✅ FIXED (string → number)
   published_at: string;
   source: string;
+  source_link: string; // ✅ NEW
   category: string;
   language: Language;
 };
@@ -30,6 +31,7 @@ const parser = new Parser<any, any>({
   }
 });
 
+// 🎧 FEEDS
 const PODCAST_FEEDS: Record<
   string,
   { url: string; language: Language }[]
@@ -53,7 +55,7 @@ const PODCAST_FEEDS: Record<
   ]
 };
 
-// ✅ Clean source extractor
+// ✅ SOURCE FIX (no more NULL)
 const getCleanSource = (feed: any, url: string): string => {
   if (feed?.title && feed.title.length < 40) return feed.title;
 
@@ -68,7 +70,26 @@ const getCleanSource = (feed: any, url: string): string => {
   }
 };
 
-// ✅ Retry logic
+// ✅ DURATION PARSER (sec में convert)
+const parseDuration = (dur: any): number => {
+  if (!dur) return 0;
+
+  if (typeof dur === "string" && dur.includes(":")) {
+    const parts = dur.split(":").map(Number);
+
+    if (parts.length === 3)
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+
+    if (parts.length === 2)
+      return parts[0] * 60 + parts[1];
+  }
+
+  if (!isNaN(dur)) return Number(dur);
+
+  return 0;
+};
+
+// 🔁 RETRY
 const fetchWithRetry = async (
   url: string,
   retries = 1
@@ -125,25 +146,25 @@ export const fetchPodcasts = async (
           audio_url: audioUrl,
           description: item.contentSnippet || "",
           image_url: image,
-          duration:
-            item?.itunes?.duration ||
-            item?.itunes_duration ||
-            "10 min",
+          duration_sec: parseDuration(
+            item?.itunes?.duration || item?.itunes_duration
+          ),
           published_at:
             item.pubDate || new Date().toISOString(),
           source,
+          source_link: feedsConfig[i].url, // ✅ FIXED
           category,
           language: lang
         });
       }
     }
 
-    // ✅ Remove duplicates
+    // 🔥 REMOVE DUPLICATES
     const unique = Array.from(
       new Map(podcasts.map((p) => [p.audio_url, p])).values()
     );
 
-    // ✅ Smart Sorting (Language priority + latest)
+    // 🔥 SMART SORT (language + latest)
     const sorted = unique.sort((a, b) => {
       const timeDiff =
         new Date(b.published_at).getTime() -
