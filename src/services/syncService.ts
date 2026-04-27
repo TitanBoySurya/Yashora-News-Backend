@@ -5,7 +5,16 @@ export const syncPodcastsToDB = async () => {
   try {
     console.log("🔄 Syncing Podcasts started...");
 
-    const categories = ["stories", "motivational", "news"];
+    // 🔥 ALL CATEGORIES (IMPORTANT FIX)
+    const categories = [
+      "stories",
+      "motivational",
+      "news",
+      "history",
+      "kids",
+      "love",
+      "horror"
+    ];
 
     for (const cat of categories) {
       const podcasts = await fetchPodcasts(cat);
@@ -15,15 +24,16 @@ export const syncPodcastsToDB = async () => {
         continue;
       }
 
-      // ✅ FIXED: Proper field mapping
       const formatted = podcasts.map((p) => ({
         title: p.title,
         audio_url: p.audio_url,
         image_url: p.image_url,
         description: p.description,
-        source_name: p.source,        // 🔥 FIX HERE
+        source_name: p.source,
+        source_link: p.source_link,
         category: p.category,
-        language_code: p.language,    // 🔥 REAL LANGUAGE (hi/en)
+        language_code: p.language,
+        duration_sec: p.duration_sec,
         published_at: p.published_at
       }));
 

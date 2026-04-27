@@ -2,15 +2,15 @@ import Parser from "rss-parser";
 
 type Language = "hi" | "en";
 
-type PodcastType = {
+export type PodcastType = {
   title: string;
   audio_url: string;
   description: string;
   image_url: string;
-  duration_sec: number; // ✅ FIXED (string → number)
+  duration_sec: number;
   published_at: string;
   source: string;
-  source_link: string; // ✅ NEW
+  source_link: string;
   category: string;
   language: Language;
 };
@@ -31,7 +31,7 @@ const parser = new Parser<any, any>({
   }
 });
 
-// 🎧 FEEDS
+// 🔥 STRONG + WORKING FEEDS ONLY
 const PODCAST_FEEDS: Record<
   string,
   { url: string; language: Language }[]
@@ -39,23 +39,41 @@ const PODCAST_FEEDS: Record<
   motivational: [
     { url: "https://feeds.simplecast.com/54nAGcIl", language: "en" },
     { url: "https://feeds.megaphone.fm/WWO3519750118", language: "en" },
-    { url: "https://anchor.fm/s/125a3d0c/podcast/rss", language: "hi" },
-    { url: "https://anchor.fm/s/6d21b8c/podcast/rss", language: "hi" }
+    { url: "https://anchor.fm/s/125a3d0c/podcast/rss", language: "hi" }
   ],
+
   news: [
     { url: "https://feeds.npr.org/500005/podcast.xml", language: "en" },
-    { url: "https://podcasts.files.bbci.co.uk/p02nq0gn.rss", language: "en" },
+    { url: "https://podcasts.files.bbci.co.uk/p02nq0gn.rss", language: "en" }
+  ],
+
+  stories: [
+    { url: "https://audioboom.com/channels/2399216.rss", language: "en" },
+    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" },
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
+  ],
+
+  history: [
     {
-      url: "https://www.omnycontent.com/d/playlist/bcc6191d-0453-410a-8664-ac6b006323c3/31998583-1628-4034-874b-ac700088022a/987f223f-e8b9-4824-814a-ac700088023a/podcast.rss",
+      url: "https://www.omnycontent.com/d/playlist/bcc6191d-0453-410a-8664-ac6b006323c3/31998583-1628-4034-874b-ac700088022a/f527c92f-1a98-43e5-8f53-ac70008d32a8/podcast.rss",
       language: "hi"
     }
   ],
-  stories: [
+
+  kids: [
+    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" }
+  ],
+
+  love: [
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
+  ],
+
+  horror: [
     { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
   ]
 };
 
-// ✅ SOURCE FIX (no more NULL)
+// ✅ SOURCE CLEAN
 const getCleanSource = (feed: any, url: string): string => {
   if (feed?.title && feed.title.length < 40) return feed.title;
 
@@ -70,7 +88,7 @@ const getCleanSource = (feed: any, url: string): string => {
   }
 };
 
-// ✅ DURATION PARSER (sec में convert)
+// ✅ DURATION → SECONDS
 const parseDuration = (dur: any): number => {
   if (!dur) return 0;
 
@@ -104,12 +122,12 @@ const fetchWithRetry = async (
 
 // 🚀 MAIN FUNCTION
 export const fetchPodcasts = async (
-  category: string = "news",
+  category: string = "stories",
   userLang: Language = "hi"
 ): Promise<PodcastType[]> => {
   try {
     const feedsConfig =
-      PODCAST_FEEDS[category] || PODCAST_FEEDS["news"];
+      PODCAST_FEEDS[category] || PODCAST_FEEDS["stories"];
 
     const feeds = await Promise.all(
       feedsConfig.map((f) => fetchWithRetry(f.url))
@@ -128,8 +146,7 @@ export const fetchPodcasts = async (
       for (const item of feed.items) {
         const audioUrl =
           item?.enclosure?.url ||
-          item?.enclosure?.["$"]?.url ||
-          null;
+          item?.enclosure?.["$"]?.url;
 
         if (!audioUrl) continue;
         if (!item?.title || item.title.length < 5) continue;
@@ -152,19 +169,17 @@ export const fetchPodcasts = async (
           published_at:
             item.pubDate || new Date().toISOString(),
           source,
-          source_link: feedsConfig[i].url, // ✅ FIXED
+          source_link: feedsConfig[i].url,
           category,
           language: lang
         });
       }
     }
 
-    // 🔥 REMOVE DUPLICATES
     const unique = Array.from(
       new Map(podcasts.map((p) => [p.audio_url, p])).values()
     );
 
-    // 🔥 SMART SORT (language + latest)
     const sorted = unique.sort((a, b) => {
       const timeDiff =
         new Date(b.published_at).getTime() -
