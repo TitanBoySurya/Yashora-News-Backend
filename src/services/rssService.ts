@@ -21,6 +21,7 @@ const FEEDS: Record<string, Record<string, string[]>> = {
       "https://www.aajtak.in/rssfeeds/?id=home",
       "https://www.abplive.com/rss",
       "https://zeenews.india.com/hindi/rss",
+      "https://www.abplive.com/home/feed"
     ],
     sports: [
       "https://www.aajtak.in/rssfeeds/?id=sports",
