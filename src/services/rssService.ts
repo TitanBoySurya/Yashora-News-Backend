@@ -21,17 +21,23 @@ const FEEDS: Record<string, Record<string, string[]>> = {
       "https://www.aajtak.in/rssfeeds/?id=home",
       "https://www.abplive.com/rss",
       "https://zeenews.india.com/hindi/rss",
-      "https://www.abplive.com/home/feed"
+      "https://www.abplive.com/home/feed",
+      "https://www.jagran.com/rss/india-national-news-rss.xml",
+      "https://www.indiatv.in/rssnews/topstory.xml",
+      "https://www.indiatv.in/rssnews/topstory-tech.xml,"
     ],
     sports: [
       "https://www.aajtak.in/rssfeeds/?id=sports",
       "https://zeenews.india.com/hindi/sports/rss",
+      "https://www.indiatv.in/rssnews/topstory-sports.xml",
     ],
     business: [
       "https://zeenews.india.com/hindi/business/rss",
+      "https://www.indiatv.in/rssnews/topstory-paisa.xml",
     ],
     tech: [
       "https://zeenews.india.com/hindi/science-technology/rss",
+      "https://www.indiatv.in/rssnews/topstory-tech.xml",
     ],
   },
 
@@ -39,6 +45,9 @@ const FEEDS: Record<string, Record<string, string[]>> = {
     general: [
       "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
       "https://feeds.feedburner.com/ndtvnews-top-stories",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
     ],
     sports: [
       "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",

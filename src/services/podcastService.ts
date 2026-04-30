@@ -19,173 +19,181 @@ const DEFAULT_IMAGE =
   "https://images.unsplash.com/photo-1478737270239-2f02b77fc618";
 
 const parser = new Parser<any, any>({
-  timeout: 15000,
+  timeout: 10000,
   headers: {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-    "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-    "Referer": "https://www.google.com/",
+    "User-Agent": "Mozilla/5.0"
   },
   customFields: {
     item: [
       ["itunes:image", "itunes_image"],
-      ["itunes:duration", "itunes_duration"],
-      ["media:content", "media_content"],
-    ],
-  },
+      ["itunes:duration", "itunes_duration"]
+    ]
+  }
 });
 
-// 🔥 VERIFIED WORKING FEEDS (Updated April 2026)
+// 🔥 STRONG + WORKING FEEDS ONLY
 const PODCAST_FEEDS: Record<
   string,
   { url: string; language: Language }[]
 > = {
-  news: [
-    // Hindi News (High Frequency)
-    { url: "https://www.bhaskar.com/rssfeed/511/india/", language: "hi" },
-    { url: "https://www.abplive.com/home/feed", language: "hi" },
-    { url: "https://www.aajtak.in/rssfeeds/?id=home", language: "hi" },
-    { url: "https://www.ndtv.com/rss/khabar", language: "hi" },
-    // English News (High Reliability)
-    { url: "https://www.ndtv.com/rss/top-stories", language: "en" },
-    { url: "https://indianexpress.com/section/india/feed/", language: "en" },
-    { url: "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml", language: "en" },
+  motivational: [
+    { url: "https://feeds.simplecast.com/54nAGcIl", language: "en" },
+    { url: "https://feeds.megaphone.fm/WWO3519750118", language: "en" },
+    { url: "https://anchor.fm/s/125a3d0c/podcast/rss", language: "hi" }
   ],
 
-  motivational: [
-    { url: "https://anchor.fm/s/4f0eb988/podcast/rss", language: "hi" }, // Josh Talks Hindi
-    { url: "https://anchor.fm/s/26600c70/podcast/rss", language: "hi" }, // Gita for Daily Living
-    { url: "https://feeds.simplecast.com/7PWFZi_d", language: "en" },    // The Ranveer Show
+  news: [
+    { url: "https://feeds.npr.org/500005/podcast.xml", language: "en" },
+    { url: "https://podcasts.files.bbci.co.uk/p02nq0gn.rss", language: "en" }
   ],
 
   stories: [
-    { url: "https://www.omnycontent.com/d/playlist/77ce34bb-6101-447a-8b1e-a9890060e29b/38604778-592a-4361-9c60-a9cf0092955f/d8c11e0e-1f7c-4700-b6a9-a9cf0092956f/podcast.rss", language: "hi" }, // BBC Kahani
-    { url: "https://anchor.fm/s/139369e0/podcast/rss", language: "hi" }, // Kahani Suno
+    { url: "https://audioboom.com/channels/2399216.rss", language: "en" },
     { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" },
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
   ],
 
   history: [
-    { url: "https://www.omnycontent.com/d/playlist/77ce34bb-6101-447a-8b1e-a9890060e29b/236166c3-1629-41d3-96b1-ab10008432f9/e0a133f4-0b92-421f-8468-ab100084330b/podcast.rss", language: "hi" }, // Itihas Ke Panne (BBC)
-    { url: "https://anchor.fm/s/2b59190c/podcast/rss", language: "hi" }, // Bharat Ka Itihas
+    {
+      url: "https://www.omnycontent.com/d/playlist/bcc6191d-0453-410a-8664-ac6b006323c3/31998583-1628-4034-874b-ac700088022a/f527c92f-1a98-43e5-8f53-ac70008d32a8/podcast.rss",
+      language: "hi"
+    }
   ],
 
   kids: [
-    { url: "https://anchor.fm/s/1f9b3b8c/podcast/rss", language: "hi" }, // Panchatantra
-    { url: "https://feeds.simplecast.com/bedtime-stories", language: "en" },
+    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" }
+  ],
+
+  love: [
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
   ],
 
   horror: [
-    { url: "https://anchor.fm/s/40371300/podcast/rss", language: "hi" }, // Ek Kahani Aisi
-    { url: "https://anchor.fm/s/1e6d42e4/podcast/rss", language: "hi" }, // Hindi Horror
-  ],
-
-  devotional: [
-    { url: "https://anchor.fm/s/4e44f8f4/podcast/rss", language: "hi" }, // Bhakti Sagar
-    { url: "https://www.spreaker.com/show/4763117/episodes/feed", language: "hi" },
-  ],
-
-  funny: [
-    { url: "https://www.omnycontent.com/d/playlist/77ce34bb-6101-447a-8b1e-a9890060e29b/7f940826-6a78-4395-9279-ab4200679848/172e7d37-8f59-450f-a39c-ab4200679854/podcast.rss", language: "hi" }, // RJ Raunac (Bauaa)
-  ],
-
-  nightstory: [
-    { url: "https://anchor.fm/s/258525e8/podcast/rss", language: "hi" }, // Neend - Sleep Stories
-  ],
-
-  veeryodha: [
-    { url: "https://anchor.fm/s/329486c0/podcast/rss", language: "hi" }, // Param Vir Chakra
-  ],
+    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
+  ]
 };
 
-// Logic for Clean Source Name
+// ✅ SOURCE CLEAN
 const getCleanSource = (feed: any, url: string): string => {
-  if (feed?.title && feed.title.length < 65) return feed.title.trim();
+  if (feed?.title && feed.title.length < 40) return feed.title;
+
   try {
-    const host = new URL(url).hostname
-      .replace(/^(www\.|feeds\.|rss\.|anchor\.|simplecast\.|omnycontent\.)/i, "")
-      .replace(/(\.com|\.org|\.in|\.co\.uk|\.feedburner|\.rss)$/i, "");
+    const host = new URL(url).hostname.replace(
+      /^(www\.|feeds\.)|(\.com|\.org)$/g,
+      ""
+    );
     return host.charAt(0).toUpperCase() + host.slice(1);
   } catch {
     return "Podcast";
   }
 };
 
-// Logic for parsing itunes:duration
+// ✅ DURATION → SECONDS
 const parseDuration = (dur: any): number => {
   if (!dur) return 0;
-  if (typeof dur === "string") {
-    if (dur.includes(":")) {
-      const parts = dur.split(":").map(Number).filter(n => !isNaN(n));
-      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-      if (parts.length === 2) return parts[0] * 60 + parts[1];
-      return parts[0];
-    }
-    if (/^\d+$/.test(dur.trim())) return Number(dur.trim());
+
+  if (typeof dur === "string" && dur.includes(":")) {
+    const parts = dur.split(":").map(Number);
+
+    if (parts.length === 3)
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+
+    if (parts.length === 2)
+      return parts[0] * 60 + parts[1];
   }
-  return typeof dur === "number" ? Math.floor(dur) : 0;
+
+  if (!isNaN(dur)) return Number(dur);
+
+  return 0;
 };
 
-const fetchWithRetry = async (url: string, retries = 2): Promise<any> => {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await parser.parseURL(url);
-    } catch (err) {
-      if (i === retries) return null;
-      await new Promise((res) => setTimeout(res, 1000 * (i + 1)));
-    }
+// 🔁 RETRY
+const fetchWithRetry = async (
+  url: string,
+  retries = 1
+): Promise<any> => {
+  try {
+    return await parser.parseURL(url);
+  } catch {
+    if (retries > 0) return fetchWithRetry(url, retries - 1);
+    return null;
   }
-  return null;
 };
 
+// 🚀 MAIN FUNCTION
 export const fetchPodcasts = async (
   category: string = "stories",
   userLang: Language = "hi"
 ): Promise<PodcastType[]> => {
   try {
-    const feedsConfig = PODCAST_FEEDS[category] || PODCAST_FEEDS["stories"];
-    const feedsData = await Promise.all(feedsConfig.map((f) => fetchWithRetry(f.url)));
+    const feedsConfig =
+      PODCAST_FEEDS[category] || PODCAST_FEEDS["stories"];
+
+    const feeds = await Promise.all(
+      feedsConfig.map((f) => fetchWithRetry(f.url))
+    );
 
     let podcasts: PodcastType[] = [];
 
-    for (let i = 0; i < feedsData.length; i++) {
-      const feed = feedsData[i];
-      const config = feedsConfig[i];
-      if (!feed?.items?.length) continue;
+    for (let i = 0; i < feeds.length; i++) {
+      const feed = feeds[i];
+      const lang = feedsConfig[i].language;
 
-      const source = getCleanSource(feed, config.url);
+      if (!feed || !Array.isArray(feed.items)) continue;
+
+      const source = getCleanSource(feed, feedsConfig[i].url);
 
       for (const item of feed.items) {
-        const audioUrl = item?.enclosure?.url || item?.media_content?.["$"]?.url;
-        if (!audioUrl || typeof audioUrl !== "string") continue;
+        const audioUrl =
+          item?.enclosure?.url ||
+          item?.enclosure?.["$"]?.url;
 
-        const image = item?.itunes?.image?.href || item?.itunes_image?.["$"]?.href || feed?.image?.url || DEFAULT_IMAGE;
+        if (!audioUrl) continue;
+        if (!item?.title || item.title.length < 5) continue;
+        if (item.title.toLowerCase().includes("trailer")) continue;
+
+        const image =
+          item?.itunes?.image?.href ||
+          item?.itunes_image?.["$"]?.href ||
+          feed?.image?.url ||
+          DEFAULT_IMAGE;
 
         podcasts.push({
-          title: item.title?.trim() || "Untitled Episode",
+          title: item.title.trim(),
           audio_url: audioUrl,
-          description: (item.contentSnippet || item.description || "").trim().slice(0, 320),
-          image_url: typeof image === "string" ? image : DEFAULT_IMAGE,
-          duration_sec: parseDuration(item?.itunes?.duration || item?.itunes_duration),
-          published_at: item.pubDate || item.isoDate || new Date().toISOString(),
+          description: item.contentSnippet || "",
+          image_url: image,
+          duration_sec: parseDuration(
+            item?.itunes?.duration || item?.itunes_duration
+          ),
+          published_at:
+            item.pubDate || new Date().toISOString(),
           source,
-          source_link: config.url,
+          source_link: feedsConfig[i].url,
           category,
-          language: config.language,
+          language: lang
         });
       }
     }
 
-    const unique = Array.from(new Map(podcasts.map((p) => [p.audio_url, p])).values());
+    const unique = Array.from(
+      new Map(podcasts.map((p) => [p.audio_url, p])).values()
+    );
 
-    return unique.sort((a, b) => {
-      const timeA = new Date(a.published_at).getTime();
-      const timeB = new Date(b.published_at).getTime();
-      const boostA = a.language === userLang ? 10 : 0;
-      const boostB = b.language === userLang ? 10 : 0;
-      return (boostB - boostA) || (timeB - timeA);
-    }).slice(0, 50);
+    const sorted = unique.sort((a, b) => {
+      const timeDiff =
+        new Date(b.published_at).getTime() -
+        new Date(a.published_at).getTime();
 
+      const boostA = a.language === userLang ? 1 : 0;
+      const boostB = b.language === userLang ? 1 : 0;
+
+      return boostB - boostA || timeDiff;
+    });
+
+    return sorted.slice(0, 50);
   } catch (err) {
-    console.error("❌ Fetch Error:", err);
+    console.error("❌ Podcast Fetch Error:", err);
     return [];
   }
 };
