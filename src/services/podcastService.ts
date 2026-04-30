@@ -19,181 +19,255 @@ const DEFAULT_IMAGE =
   "https://images.unsplash.com/photo-1478737270239-2f02b77fc618";
 
 const parser = new Parser<any, any>({
-  timeout: 10000,
-  headers: {
-    "User-Agent": "Mozilla/5.0"
-  },
+  timeout: 15000,
+  headers: { "User-Agent": "Mozilla/5.0" },
   customFields: {
     item: [
       ["itunes:image", "itunes_image"],
-      ["itunes:duration", "itunes_duration"]
-    ]
-  }
+      ["itunes:duration", "itunes_duration"],
+    ],
+  },
 });
 
-// 🔥 STRONG + WORKING FEEDS ONLY
+
+// 🔥 ALL FEEDS (CLEAN + CATEGORIZED)
 const PODCAST_FEEDS: Record<
   string,
-  { url: string; language: Language }[]
+  { url: string; lang: Language }[]
 > = {
-  motivational: [
-    { url: "https://feeds.simplecast.com/54nAGcIl", language: "en" },
-    { url: "https://feeds.megaphone.fm/WWO3519750118", language: "en" },
-    { url: "https://anchor.fm/s/125a3d0c/podcast/rss", language: "hi" }
-  ],
-
   news: [
-    { url: "https://feeds.npr.org/500005/podcast.xml", language: "en" },
-    { url: "https://podcasts.files.bbci.co.uk/p02nq0gn.rss", language: "en" }
+    { url: "https://podcasts.files.bbci.co.uk/p09ds7zx.rss", lang: "hi" },
+    { url: "https://podcasts.files.bbci.co.uk/p05525mc.rss", lang: "hi" },
+    { url: "https://podcasts.files.bbci.co.uk/p0552909.rss", lang: "hi" },
+    { url: "https://www.spreaker.com/show/4921017/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/6243326/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/4921016/episodes/feed", lang: "hi" },
   ],
 
   stories: [
-    { url: "https://audioboom.com/channels/2399216.rss", language: "en" },
-    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" },
-    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
+    { url: "https://anchor.fm/s/1200947c/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/11eb8e10/podcast/rss", lang: "hi" },
+    { url: "https://podcasts.files.bbci.co.uk/p08s9wv2.rss", lang: "hi" },
+    { url: "https://www.spreaker.com/show/5662348/episodes/feed", lang: "hi" },
   ],
 
-  history: [
-    {
-      url: "https://www.omnycontent.com/d/playlist/bcc6191d-0453-410a-8664-ac6b006323c3/31998583-1628-4034-874b-ac700088022a/f527c92f-1a98-43e5-8f53-ac70008d32a8/podcast.rss",
-      language: "hi"
-    }
+  mythology: [
+    { url: "https://feeds.acast.com/public/shows/683c836f62f4742d48413b92", lang: "hi" },
+    { url: "https://anchor.fm/s/1020b1e60/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/d8a67a88/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/55b73108/podcast/rss", lang: "hi" },
+  ],
+
+  spirituality: [
+    { url: "https://feeds.megaphone.fm/CPP2332226300", lang: "hi" },
+    { url: "https://feeds.hubhopper.com/4bfe0ef099229f6846b86d6ef7502fa1.rss", lang: "hi" },
+    { url: "https://anchor.fm/s/51651304/podcast/rss", lang: "hi" },
+    { url: "https://www.spreaker.com/show/4921024/episodes/feed", lang: "hi" },
+  ],
+
+  crime: [
+    { url: "https://anchor.fm/s/f6585ee8/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/f5f50230/podcast/rss", lang: "hi" },
+    { url: "https://www.spreaker.com/show/6260063/episodes/feed", lang: "hi" },
   ],
 
   kids: [
-    { url: "https://feeds.simplecast.com/8kXvPz0X", language: "en" }
+    { url: "https://www.spreaker.com/show/6676973/episodes/feed", lang: "hi" },
   ],
 
-  love: [
-    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
+  motivation: [
+    { url: "https://anchor.fm/s/f099a70/podcast/rss", lang: "hi" },
+    { url: "https://feeds.megaphone.fm/ISP6325736115", lang: "hi" },
   ],
 
-  horror: [
-    { url: "https://anchor.fm/s/3b7c0a00/podcast/rss", language: "hi" }
-  ]
+  audiobook: [
+    { url: "https://anchor.fm/s/fb103fb4/podcast/rss", lang: "hi" },
+    { url: "https://audioboom.com/channels/4902468.rss", lang: "hi" },
+  ],
+
+  knowledge: [
+    { url: "https://anchor.fm/s/c9caf5c/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/10f357694/podcast/rss", lang: "hi" },
+    { url: "https://anchor.fm/s/1d14621c/podcast/rss", lang: "hi" },
+  ],
+
+  aajtak: [
+    { url: "https://www.spreaker.com/show/5018441/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/4688572/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/6032161/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/6231950/episodes/feed", lang: "hi" },
+    { url: "https://www.spreaker.com/show/5989951/episodes/feed", lang: "hi" },
+  ],
 };
 
-// ✅ SOURCE CLEAN
-const getCleanSource = (feed: any, url: string): string => {
+
+// ⚡ CACHE
+const CACHE: Record<string, { time: number; data: PodcastType[] }> = {};
+const CACHE_TTL = 10 * 60 * 1000;
+
+
+// ⚡ CONCURRENCY
+const LIMIT = 5;
+
+const runLimited = async (tasks: (() => Promise<any>)[]) => {
+  let index = 0;
+  const results: any[] = [];
+
+  const workers = Array(LIMIT).fill(0).map(async () => {
+    while (index < tasks.length) {
+      const i = index++;
+      results[i] = await tasks[i]();
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+};
+
+
+// 🔁 RETRY + BACKOFF
+const fetchWithRetry = async (
+  url: string,
+  retries = 2,
+  delay = 500
+): Promise<any> => {
+  try {
+    return await parser.parseURL(url);
+  } catch (err) {
+    if (retries > 0) {
+      await new Promise((r) => setTimeout(r, delay));
+      return fetchWithRetry(url, retries - 1, delay * 2);
+    }
+    console.error("❌ Feed failed:", url);
+    return null;
+  }
+};
+
+
+// 🧠 SOURCE CLEAN
+const getSource = (feed: any, url: string) => {
   if (feed?.title && feed.title.length < 40) return feed.title;
 
   try {
-    const host = new URL(url).hostname.replace(
-      /^(www\.|feeds\.)|(\.com|\.org)$/g,
-      ""
-    );
+    const host = new URL(url).hostname
+      .replace(/^(www\.|feeds\.)/, "")
+      .replace(/\.(com|org|net|co\.uk)$/, "");
+
     return host.charAt(0).toUpperCase() + host.slice(1);
   } catch {
     return "Podcast";
   }
 };
 
-// ✅ DURATION → SECONDS
+
+// ⏱ DURATION
 const parseDuration = (dur: any): number => {
   if (!dur) return 0;
 
   if (typeof dur === "string" && dur.includes(":")) {
-    const parts = dur.split(":").map(Number);
-
-    if (parts.length === 3)
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
-
-    if (parts.length === 2)
-      return parts[0] * 60 + parts[1];
+    const p = dur.split(":").map(Number);
+    if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+    if (p.length === 2) return p[0] * 60 + p[1];
   }
 
   if (!isNaN(dur)) return Number(dur);
-
   return 0;
 };
 
-// 🔁 RETRY
-const fetchWithRetry = async (
-  url: string,
-  retries = 1
-): Promise<any> => {
-  try {
-    return await parser.parseURL(url);
-  } catch {
-    if (retries > 0) return fetchWithRetry(url, retries - 1);
-    return null;
-  }
-};
 
-// 🚀 MAIN FUNCTION
-export const fetchPodcasts = async (
-  category: string = "stories",
+// 🚀 CATEGORY API
+export const fetchCategory = async (
+  category: string,
   userLang: Language = "hi"
 ): Promise<PodcastType[]> => {
-  try {
-    const feedsConfig =
-      PODCAST_FEEDS[category] || PODCAST_FEEDS["stories"];
+  const cacheKey = `${category}_${userLang}`;
 
-    const feeds = await Promise.all(
-      feedsConfig.map((f) => fetchWithRetry(f.url))
-    );
-
-    let podcasts: PodcastType[] = [];
-
-    for (let i = 0; i < feeds.length; i++) {
-      const feed = feeds[i];
-      const lang = feedsConfig[i].language;
-
-      if (!feed || !Array.isArray(feed.items)) continue;
-
-      const source = getCleanSource(feed, feedsConfig[i].url);
-
-      for (const item of feed.items) {
-        const audioUrl =
-          item?.enclosure?.url ||
-          item?.enclosure?.["$"]?.url;
-
-        if (!audioUrl) continue;
-        if (!item?.title || item.title.length < 5) continue;
-        if (item.title.toLowerCase().includes("trailer")) continue;
-
-        const image =
-          item?.itunes?.image?.href ||
-          item?.itunes_image?.["$"]?.href ||
-          feed?.image?.url ||
-          DEFAULT_IMAGE;
-
-        podcasts.push({
-          title: item.title.trim(),
-          audio_url: audioUrl,
-          description: item.contentSnippet || "",
-          image_url: image,
-          duration_sec: parseDuration(
-            item?.itunes?.duration || item?.itunes_duration
-          ),
-          published_at:
-            item.pubDate || new Date().toISOString(),
-          source,
-          source_link: feedsConfig[i].url,
-          category,
-          language: lang
-        });
-      }
-    }
-
-    const unique = Array.from(
-      new Map(podcasts.map((p) => [p.audio_url, p])).values()
-    );
-
-    const sorted = unique.sort((a, b) => {
-      const timeDiff =
-        new Date(b.published_at).getTime() -
-        new Date(a.published_at).getTime();
-
-      const boostA = a.language === userLang ? 1 : 0;
-      const boostB = b.language === userLang ? 1 : 0;
-
-      return boostB - boostA || timeDiff;
-    });
-
-    return sorted.slice(0, 50);
-  } catch (err) {
-    console.error("❌ Podcast Fetch Error:", err);
-    return [];
+  if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].time < CACHE_TTL) {
+    return CACHE[cacheKey].data;
   }
+
+  const feeds = PODCAST_FEEDS[category] || PODCAST_FEEDS["stories"];
+
+  const tasks = feeds.map((f) => () => fetchWithRetry(f.url));
+  const responses = await runLimited(tasks);
+
+  let items: PodcastType[] = [];
+
+  for (let i = 0; i < responses.length; i++) {
+    const feed = responses[i];
+    const config = feeds[i];
+
+    if (!feed?.items) continue;
+
+    const source = getSource(feed, config.url);
+
+    for (const item of feed.items) {
+      const audio =
+        item?.enclosure?.url || item?.enclosure?.["$"]?.url;
+
+      if (!audio) continue;
+      if (!item?.title || item.title.length < 5) continue;
+      if (item.title.toLowerCase().includes("trailer")) continue;
+
+      const image =
+        item?.itunes?.image?.href ||
+        item?.itunes_image?.["$"]?.href ||
+        feed?.image?.url ||
+        DEFAULT_IMAGE;
+
+      items.push({
+        title: item.title.trim(),
+        audio_url: audio,
+        description: item.contentSnippet || "",
+        image_url: image,
+        duration_sec: parseDuration(
+          item?.itunes?.duration || item?.itunes_duration
+        ),
+        published_at:
+          item.pubDate || new Date().toISOString(),
+        source,
+        source_link: config.url,
+        category,
+        language: config.lang,
+      });
+    }
+  }
+
+  // ✅ STRONG DEDUPE
+  const unique = Array.from(
+    new Map(
+      items.map((p) => [`${p.audio_url}_${p.title}`, p])
+    ).values()
+  );
+
+  // ✅ SORT
+  const sorted = unique.sort((a, b) => {
+    const timeDiff =
+      new Date(b.published_at).getTime() -
+      new Date(a.published_at).getTime();
+
+    const boostA = a.language === userLang ? 1 : 0;
+    const boostB = b.language === userLang ? 1 : 0;
+
+    return boostB - boostA || timeDiff;
+  });
+
+  const finalData = sorted.slice(0, 40);
+
+  CACHE[cacheKey] = { time: Date.now(), data: finalData };
+
+  return finalData;
+};
+
+
+// 🎬 HOME API (PARALLEL FAST)
+export const fetchHome = async (userLang: Language = "hi") => {
+  const entries = await Promise.all(
+    Object.keys(PODCAST_FEEDS).map(async (cat) => [
+      cat,
+      await fetchCategory(cat, userLang),
+    ])
+  );
+
+  return Object.fromEntries(entries);
 };
